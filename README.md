@@ -2,7 +2,7 @@
 
 An enterprise-grade, developer intelligence platform that utilizes Abstract Syntax Tree (AST) parsing, Graph Knowledge Networks, and high-performance vector databases to execute precise structural search and contextual analysis across complex software repositories.
 
-Standard Retrieval-Augmented Generation (RAG) models fail on code bases because naive text-splitting chops logical functions in half and destroys contextual inheritance. This engine eliminates hallucinations by structuring code assets into a unified Graph-Vector index.
+Standard Retrieval-Augmented Generation (RAG) models do not work on code bases because naive text-splitting chops logical functions in half and destroys contextual inheritance. This engine eliminates hallucinations by structuring code assets into a unified Graph-Vector index.
 
 ---
 
