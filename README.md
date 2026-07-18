@@ -1,1 +1,3 @@
-# git-rag-project
+# GitHub RAG project
+
+Yooooo
