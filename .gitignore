@@ -1,0 +1,31 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+genv/
+
+# Environment variables & secrets (Never commit these!)
+.env
+.env.*
+
+# Operating System files (Crucial for macOS)
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific local scratchpads
+backend/scarthpad.py

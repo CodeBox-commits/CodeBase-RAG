@@ -1,0 +1,9 @@
+fastapi>=0.110.0
+uvicorn>=0.28.0
+langgraph>=0.0.30
+qdrant-client>=1.8.0
+neo4j>=5.18.0
+celery>=5.3.6
+redis>=5.0.3
+gitpython>=3.1.43
+pydantic>=2.6.0
