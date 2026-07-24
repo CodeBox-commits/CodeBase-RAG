@@ -1,0 +1,85 @@
+import tempfile
+import subprocess
+import logging
+from pathlib import Path
+from app.workers.celery_app import celery_app
+from app.services.graph_db import graph_db
+from app.services.vector_db import vector_db
+from app.core.parser import CodeParser
+
+logger = logging.getLogger(__name__)
+
+@celery_app.task(bind=True, name="process_repository")
+def process_repository(self, repo_url: str):
+    graph_db.connect()
+    vector_db.connect()
+    
+    logger.info(f"Starting ingestion for {repo_url}")
+    graph_db.merge_repository(repo_url)
+
+    self.update_state(state="CLONING", meta={"step": "Downloading repository"})
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        repo_path = Path(temp_dir) / "repo"
+        
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", repo_url, str(repo_path)],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=300 
+            )
+        except subprocess.TimeoutExpired:
+            logger.error(f"Git clone timed out for {repo_url}.")
+            return {"status": "failed", "error": "Git clone timeout"}
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Git clone failed: {e.stderr}")
+            return {"status": "failed", "error": "Invalid repository or access denied"}
+
+        self.update_state(state="PARSING", meta={"step": "Extracting AST definitions & vectors"})
+
+        parser = CodeParser()
+        parsed_files_count = 0
+
+        for file_path in repo_path.rglob("*.py"):
+            if ".venv" in file_path.parts or ".git" in file_path.parts or "tests" in file_path.parts:
+                continue
+            
+            try:
+                content = file_path.read_text(encoding="utf-8")
+                relative_path = str(file_path.relative_to(repo_path))
+                
+                parsed_module = parser.parse_code(content)
+                file_lines = content.splitlines()
+                vector_items = []
+
+                for cls in parsed_module.classes:
+                    class_data = cls.model_dump()
+                    graph_db.merge_class(repo_url, relative_path, class_data)
+                    start_idx = max(0, cls.lineno - 1)
+                    end_idx = getattr(cls, "end_lineno", len(file_lines))
+
+                    code_snippet = "\n".join(file_lines[start_idx:end_idx])
+                    vector_items.append({
+                        "name": cls.name,
+                        "text": code_snippet,
+                        "type": "class",
+                        "language": "python",
+                        "start_line": cls.lineno,
+                        "end_line": getattr(cls, "end_lineno", cls.lineno),
+                        "vector": [0.0] * 1536 
+                    })
+                
+                if vector_items:
+                    vector_db.upsert_batch(repo_url, relative_path, vector_items)
+                
+                parsed_files_count += 1
+                
+            except Exception as e:
+                logger.warning(f"AST Parsing & Ingestion failed for {file_path.name}: {str(e)}")
+                continue
+        
+        logger.info(f"Ingestion complete. Parsed {parsed_files_count} Python files.")
+        return {"status": "success", "parsed_files": parsed_files_count, "repo_url": repo_url}
