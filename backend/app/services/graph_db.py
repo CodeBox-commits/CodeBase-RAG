@@ -40,11 +40,22 @@ class Neo4jService:
         with self.driver.session() as session:
             session.execute_write(lambda tx: tx.run(query, url=repo_url))
 
+    def delete_repository_data(self, repo_url: str):
+        query = """
+        MATCH (r:Repository {url: $repo_url})
+        DETACH DELETE r
+        WITH 1 AS dummy
+        MATCH (n) WHERE n.repo_url = $repo_url
+        DETACH DELETE n
+        """
+        with self.driver.session() as session:
+            session.execute_write(lambda tx: tx.run(query, repo_url=repo_url))
+
     def merge_function(self, repo_url: str, file_path: str, chunk_data: Dict[str, Any]):
         query = """
         MATCH (r:Repository {url: $repo_url})
         
-        MERGE (f:Function {filepath: $file_path, name: $name})
+        MERGE (f:Function {repo_url: $repo_url, filepath: $file_path, name: $name})
         SET f.docstring = $docstring,
             f.start_line = $start_line,
             f.end_line = $end_line,
@@ -56,9 +67,9 @@ class Neo4jService:
             SET f:Method
         )
         
-        WITH f
+        WITH f, $repo_url AS repo_url
         UNWIND $calls AS callee_name
-        MERGE (callee:Function {name: callee_name})
+        MERGE (callee:UnresolvedCall {name: callee_name, repo_url: repo_url})
         MERGE (f)-[:CALLS]->(callee)
         """
         with self.driver.session() as session:

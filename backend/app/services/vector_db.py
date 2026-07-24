@@ -18,20 +18,27 @@ class QdrantService:
         self.client = None
 
     def connect(self, vector_size: int = None):
+        if self.client:
+            if vector_size and vector_size != self.vector_size:
+                raise ValueError(f"Vector size mismatch: requested {vector_size}, but already connected with {self.vector_size}")
+            return
+            
         if vector_size:
             self.vector_size = vector_size
-        if not self.client:
-            try:
-                self.client = QdrantClient(host=self.host, port=self.port)
-                self._ensure_collection_exists()
-                logger.info(f"✅ Qdrant Connected & Collection '{self.collection_name}' Verified (dim: {self.vector_size}).")
-            except Exception as e:
-                logger.error(f"❌ Failed to connect to Qdrant on {self.host}:{self.port}")
-                raise e
+            
+        try:
+            self.client = QdrantClient(host=self.host, port=self.port)
+            self._ensure_collection_exists()
+            logger.info(f"✅ Qdrant Connected & Collection '{self.collection_name}' Verified (dim: {self.vector_size}).")
+        except Exception as e:
+            logger.error(f"❌ Failed to connect to Qdrant on {self.host}:{self.port}")
+            raise e
 
     def _ensure_collection_exists(self):
         try:
-            self.client.get_collection(self.collection_name)
+            collection = self.client.get_collection(self.collection_name)
+            if collection.config.params.vectors.size != self.vector_size:
+                raise ValueError(f"Qdrant collection '{self.collection_name}' has dimension {collection.config.params.vectors.size}, but {self.vector_size} is required.")
         except UnexpectedResponse as e:
             if e.status_code == 404:
                 logger.info(f"Creating Qdrant collection: {self.collection_name} (dim: {self.vector_size})")
@@ -48,6 +55,20 @@ class QdrantService:
     def _generate_deterministic_uuid(self, unique_string: str) -> str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, unique_string))
 
+    def delete_repository(self, repo_url: str):
+        if not self.client:
+            self.connect()
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.Filter(
+                    must=[models.FieldCondition(key="repo_url", match=models.MatchValue(value=repo_url))]
+                )
+            )
+            logger.info(f"Deleted vector embeddings for repo: {repo_url}")
+        except Exception as e:
+            logger.error(f"Failed to delete repository data from Qdrant: {e}")
+
     def upsert_batch(self, repo_url: str, filepath: str, items: List[Dict[str, Any]]):
         if not items:
             return
@@ -62,7 +83,7 @@ class QdrantService:
                 )
                 continue
 
-            unique_key = f"{repo_url}::{filepath}::{item['name']}"
+            unique_key = f"{repo_url}::{filepath}::{item['name']}::{item.get('type')}::{item.get('start_line')}"
             point_id = self._generate_deterministic_uuid(unique_key)
             
             payload = {

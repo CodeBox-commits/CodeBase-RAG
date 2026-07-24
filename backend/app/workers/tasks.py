@@ -1,4 +1,5 @@
 import os
+import time
 import tempfile
 import subprocess
 import logging
@@ -11,8 +12,15 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 logger = logging.getLogger(__name__)
 
+def normalize_repo_url(url: str) -> str:
+    url = str(url).strip()
+    if url.endswith(".git"):
+        url = url[:-4]
+    return url.rstrip("/")
+
 @celery_app.task(bind=True, name="process_repository")
 def process_repository(self, repo_url: str):
+    repo_url = normalize_repo_url(repo_url)
     graph_db.connect()
     
     api_key = os.getenv("GEMINI_API_KEY")
@@ -26,14 +34,9 @@ def process_repository(self, repo_url: str):
         google_api_key=api_key
     )
     
-    try:
-        sample_emb = embeddings.embed_query("test")
-        vector_db.connect(vector_size=len(sample_emb))
-    except Exception as e:
-        logger.error(f"Failed to initialize embeddings/vector_db connection: {e}")
-        return {"status": "failed", "error": f"Vector DB initialization failed: {e}"}
-    
     logger.info(f"Starting ingestion for {repo_url}")
+    graph_db.delete_repository_data(repo_url)
+    vector_db.delete_repository(repo_url)
     graph_db.merge_repository(repo_url)
 
     self.update_state(state="CLONING", meta={"step": "Downloading repository"})
@@ -61,6 +64,7 @@ def process_repository(self, repo_url: str):
 
         parser = CodeParser()
         parsed_files_count = 0
+        failed_files_count = 0
 
         for file_path in repo_path.rglob("*.py"):
             if ".venv" in file_path.parts or ".git" in file_path.parts or "tests" in file_path.parts:
@@ -75,7 +79,26 @@ def process_repository(self, repo_url: str):
                     continue
                 
                 texts_to_embed = [chunk.source_code for chunk in chunks]
-                embeddings_list = embeddings.embed_documents(texts_to_embed)
+                
+                embeddings_list = []
+                batch_size = 100
+                for i in range(0, len(texts_to_embed), batch_size):
+                    batch = texts_to_embed[i:i+batch_size]
+                    for attempt in range(3):
+                        try:
+                            embeddings_list.extend(embeddings.embed_documents(batch))
+                            break
+                        except Exception as e:
+                            if attempt == 2:
+                                raise e
+                            time.sleep(2 ** attempt)
+
+                if not vector_db.client and embeddings_list:
+                    try:
+                        vector_db.connect(vector_size=len(embeddings_list[0]))
+                    except Exception as e:
+                        logger.error(f"Failed to initialize vector_db connection: {e}")
+                        return {"status": "failed", "error": f"Vector DB initialization failed: {e}"}
                 
                 vector_items = []
                 for chunk, embedding in zip(chunks, embeddings_list):
@@ -99,7 +122,16 @@ def process_repository(self, repo_url: str):
                 
             except Exception as e:
                 logger.warning(f"AST Parsing & Ingestion failed for {file_path.name}: {str(e)}")
+                failed_files_count += 1
                 continue
         
-        logger.info(f"Ingestion complete. Parsed {parsed_files_count} Python files.")
-        return {"status": "success", "parsed_files": parsed_files_count, "repo_url": repo_url}
+        logger.info(f"Ingestion complete. Parsed {parsed_files_count} Python files. Failed {failed_files_count}.")
+        
+        if parsed_files_count == 0 and failed_files_count > 0:
+            status = "failed"
+        elif failed_files_count > 0:
+            status = "partial_success"
+        else:
+            status = "success"
+            
+        return {"status": status, "parsed_files": parsed_files_count, "failed_files": failed_files_count, "repo_url": repo_url}
