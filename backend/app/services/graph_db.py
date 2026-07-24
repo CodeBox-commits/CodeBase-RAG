@@ -40,24 +40,38 @@ class Neo4jService:
         with self.driver.session() as session:
             session.execute_write(lambda tx: tx.run(query, url=repo_url))
 
-    def merge_class(self, repo_url: str, file_path: str, class_data: Dict[str, Any]):
+    def merge_function(self, repo_url: str, file_path: str, chunk_data: Dict[str, Any]):
         query = """
-
         MATCH (r:Repository {url: $repo_url})
         
-        MERGE (c:Class {filepath: $file_path, name: $class_name})
-        SET c.docstring = $docstring, c.start_line = $start_line
-
-        MERGE (r)-[:CONTAINS_CLASS]->(c)
+        MERGE (f:Function {filepath: $file_path, name: $name})
+        SET f.docstring = $docstring,
+            f.start_line = $start_line,
+            f.end_line = $end_line,
+            f.type = $type
+            
+        MERGE (r)-[:CONTAINS_FUNCTION]->(f)
+        
+        FOREACH (ignoreMe IN CASE WHEN $type = 'method' THEN [1] ELSE [] END |
+            SET f:Method
+        )
+        
+        WITH f
+        UNWIND $calls AS callee_name
+        MERGE (callee:Function {name: callee_name})
+        MERGE (f)-[:CALLS]->(callee)
         """
         with self.driver.session() as session:
             session.execute_write(lambda tx: tx.run(
                 query,
                 repo_url=repo_url,
                 file_path=file_path,
-                class_name=class_data.get("name"),
-                docstring=class_data.get("docstring"),
-                start_line=class_data.get("lineno")
+                name=chunk_data.get("name"),
+                type=chunk_data.get("type"),
+                start_line=chunk_data.get("start_line"),
+                end_line=chunk_data.get("end_line"),
+                docstring=chunk_data.get("docstring"),
+                calls=chunk_data.get("calls", [])
             ))
 
 graph_db = Neo4jService()

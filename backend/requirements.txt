@@ -7,3 +7,4 @@ celery>=5.3.6
 redis>=5.0.3
 gitpython>=3.1.43
 pydantic>=2.6.0
+langchain-google-genai

@@ -11,7 +11,7 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    task_serializaion="json",
+    task_serialization="json",
     result_serialization="json",
     accept_content=["json"],
 

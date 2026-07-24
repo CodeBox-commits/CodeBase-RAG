@@ -115,7 +115,7 @@ class CodeAgent:
  
         results: List[Dict[str, Any]] = []
         try:
-            vector_db.connect()
+            vector_db.connect(vector_size=len(embedding))
             search_hits = vector_db.client.search(
                 collection_name=vector_db.collection_name,
                 query_vector=embedding,
@@ -175,8 +175,6 @@ class CodeAgent:
         WHERE n.name IN $symbols
         OPTIONAL MATCH (n)-[:CALLS]->(callee)
         OPTIONAL MATCH (caller)-[:CALLS]->(n)
-        OPTIONAL MATCH (n)-[:INHERITS_FROM]->(parent)
-        OPTIONAL MATCH (n)-[:IMPORTS]->(imported)
         RETURN
             labels(n)          AS node_labels,
             n.name              AS name,
@@ -184,9 +182,7 @@ class CodeAgent:
             n.start_line        AS start_line,
             n.docstring         AS docstring,
             collect(DISTINCT callee.name)  AS calls,
-            collect(DISTINCT caller.name)  AS called_by,
-            collect(DISTINCT parent.name)  AS inherits_from,
-            collect(DISTINCT imported.name) AS imports
+            collect(DISTINCT caller.name)  AS called_by
         LIMIT $limit
         """
         graph_context: List[Dict[str, Any]] = []
@@ -286,8 +282,6 @@ class CodeAgent:
             for rel_key, rel_label in (
                 ("calls", "Calls"),
                 ("called_by", "Called by"),
-                ("inherits_from", "Inherits from"),
-                ("imports", "Imports"),
             ):
                 values = [v for v in (g.get(rel_key) or []) if v]
                 if values:

@@ -1,3 +1,4 @@
+import os
 import tempfile
 import subprocess
 import logging
@@ -6,13 +7,31 @@ from app.workers.celery_app import celery_app
 from app.services.graph_db import graph_db
 from app.services.vector_db import vector_db
 from app.core.parser import CodeParser
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 logger = logging.getLogger(__name__)
 
 @celery_app.task(bind=True, name="process_repository")
 def process_repository(self, repo_url: str):
     graph_db.connect()
-    vector_db.connect()
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        logger.error("GEMINI_API_KEY is not set.")
+        return {"status": "failed", "error": "GEMINI_API_KEY is not set"}
+    
+    embedding_model = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model=embedding_model,
+        google_api_key=api_key
+    )
+    
+    try:
+        sample_emb = embeddings.embed_query("test")
+        vector_db.connect(vector_size=len(sample_emb))
+    except Exception as e:
+        logger.error(f"Failed to initialize embeddings/vector_db connection: {e}")
+        return {"status": "failed", "error": f"Vector DB initialization failed: {e}"}
     
     logger.info(f"Starting ingestion for {repo_url}")
     graph_db.merge_repository(repo_url)
@@ -51,25 +70,26 @@ def process_repository(self, repo_url: str):
                 content = file_path.read_text(encoding="utf-8")
                 relative_path = str(file_path.relative_to(repo_path))
                 
-                parsed_module = parser.parse_code(content)
-                file_lines = content.splitlines()
+                chunks = parser.parse_python_source(relative_path, content)
+                if not chunks:
+                    continue
+                
+                texts_to_embed = [chunk.source_code for chunk in chunks]
+                embeddings_list = embeddings.embed_documents(texts_to_embed)
+                
                 vector_items = []
+                for chunk, embedding in zip(chunks, embeddings_list):
+                    chunk_data = chunk.model_dump()
+                    graph_db.merge_function(repo_url, relative_path, chunk_data)
 
-                for cls in parsed_module.classes:
-                    class_data = cls.model_dump()
-                    graph_db.merge_class(repo_url, relative_path, class_data)
-                    start_idx = max(0, cls.lineno - 1)
-                    end_idx = getattr(cls, "end_lineno", len(file_lines))
-
-                    code_snippet = "\n".join(file_lines[start_idx:end_idx])
                     vector_items.append({
-                        "name": cls.name,
-                        "text": code_snippet,
-                        "type": "class",
+                        "name": chunk.name,
+                        "text": chunk.source_code,
+                        "type": chunk.type,
                         "language": "python",
-                        "start_line": cls.lineno,
-                        "end_line": getattr(cls, "end_lineno", cls.lineno),
-                        "vector": [0.0] * 1536 
+                        "start_line": chunk.start_line,
+                        "end_line": chunk.end_line,
+                        "vector": embedding 
                     })
                 
                 if vector_items:

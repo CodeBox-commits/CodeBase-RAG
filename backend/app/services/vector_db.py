@@ -14,15 +14,17 @@ class QdrantService:
         self.host = os.getenv("QDRANT_HOST", "qdrant")
         self.port = int(os.getenv("QDRANT_PORT", 6333))
         self.collection_name = os.getenv("QDRANT_COLLECTION", "code_snippets")
-        self.vector_size = int(os.getenv("VECTOR_SIZE", 1536))
+        self.vector_size = int(os.getenv("VECTOR_SIZE", 768))
         self.client = None
 
-    def connect(self):
+    def connect(self, vector_size: int = None):
+        if vector_size:
+            self.vector_size = vector_size
         if not self.client:
             try:
                 self.client = QdrantClient(host=self.host, port=self.port)
                 self._ensure_collection_exists()
-                logger.info(f"✅ Qdrant Connected & Collection '{self.collection_name}' Verified.")
+                logger.info(f"✅ Qdrant Connected & Collection '{self.collection_name}' Verified (dim: {self.vector_size}).")
             except Exception as e:
                 logger.error(f"❌ Failed to connect to Qdrant on {self.host}:{self.port}")
                 raise e
