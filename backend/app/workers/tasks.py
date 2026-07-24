@@ -28,13 +28,29 @@ def process_repository(self, repo_url: str):
         logger.error("GEMINI_API_KEY is not set.")
         return {"status": "failed", "error": "GEMINI_API_KEY is not set"}
     
+
     embedding_model = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
+
     embeddings = GoogleGenerativeAIEmbeddings(
-        model=embedding_model,
-        google_api_key=api_key
+      model=embedding_model,
+      google_api_key=api_key
     )
-    
+
+    try:
+      sample_embedding = embeddings.embed_query("dimension_check")
+      vector_db.connect(vector_size=len(sample_embedding))
+    except Exception as e:
+       logger.error(
+          f"Failed to initialize embeddings/vector DB: {e}",
+          exc_info=True
+       )
+       return {
+          "status": "failed",
+          "error": f"Vector DB initialization failed: {str(e)}"
+       }
+
     logger.info(f"Starting ingestion for {repo_url}")
+
     graph_db.delete_repository_data(repo_url)
     vector_db.delete_repository(repo_url)
     graph_db.merge_repository(repo_url)
@@ -92,13 +108,6 @@ def process_repository(self, repo_url: str):
                             if attempt == 2:
                                 raise e
                             time.sleep(2 ** attempt)
-
-                if not vector_db.client and embeddings_list:
-                    try:
-                        vector_db.connect(vector_size=len(embeddings_list[0]))
-                    except Exception as e:
-                        logger.error(f"Failed to initialize vector_db connection: {e}")
-                        return {"status": "failed", "error": f"Vector DB initialization failed: {e}"}
                 
                 vector_items = []
                 for chunk, embedding in zip(chunks, embeddings_list):
