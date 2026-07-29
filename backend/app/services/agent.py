@@ -6,6 +6,8 @@ from typing import TypedDict, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from app.services.vector_db import vector_db
+from app.services.query_analyzer import QueryAnalyzer
+from app.services.query_rewriter import QueryRewriter
 from app.services.graph_db import graph_db
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,10 @@ class AgentState(TypedDict):
     question: str
     repo_url: str
     question_embedding: Optional[List[float]]
+    rewritten_queries: List[str]
+    query_type: str
+    complexity: str
+    symbols: List[str]
     vector_results: List[Dict[str, Any]]
     graph_results: List[Dict[str, Any]]
     needs_graph_search: bool
@@ -61,6 +67,8 @@ class CodeAgent:
             temperature=0,
             max_output_tokens=self.config.max_output_tokens,
         )
+        self.query_analyzer = QueryAnalyzer(self.llm)
+        self.query_rewriter = QueryRewriter(self.llm)
         self.embeddings = GoogleGenerativeAIEmbeddings(
             model=self.config.embedding_model,
             google_api_key=self.config.api_key,
@@ -68,14 +76,20 @@ class CodeAgent:
         self.workflow = self._build_workflow()
  
     def _build_workflow(self) -> Any:
+        
         graph = StateGraph(AgentState)
  
+        graph.add_node("query_analyzer", self.node_query_analyzer)
+        graph.add_node("query_rewriter", self.node_query_rewriter)
         graph.add_node("embed_question", self.node_embed_question)
         graph.add_node("vector_search", self.node_vector_search)
         graph.add_node("graph_search", self.node_graph_search)
         graph.add_node("generate_response", self.node_generate_response)
  
-        graph.set_entry_point("embed_question")
+        graph.set_entry_point("query_analyzer")
+
+        graph.add_edge("query_analyzer", "embed_question")
+        graph.add_edge("query_rewriter", "embed_question")
         graph.add_edge("embed_question", "vector_search")
  
         graph.add_conditional_edges(
@@ -94,7 +108,78 @@ class CodeAgent:
     @staticmethod
     def route_after_vector_search(state: AgentState) -> str:
         return "graph_search" if state.get("needs_graph_search") else "generate_response"
+    
+    def node_query_analyzer(self, state: AgentState) -> Dict[str, Any]:
+       errors = list(state.get("errors", []))
+
+       try:
+         analysis = self.query_analyzer.analyze(state["question"])
+
+         logger.info(
+             "Query analyzed: type=%s complexity=%s symbols=%s",
+             analysis.query_type,
+             analysis.complexity,
+             analysis.symbols,
+         )
+
+         return {
+             "query_type": analysis.query_type,
+             "complexity": analysis.complexity,
+             "symbols": analysis.symbols,
+             "errors": errors,
+          }
+
+       except Exception as e:
+         logger.error(
+             "Query analyzer node failed: %s",
+             e,
+             exc_info=True,
+         ) 
+
+         errors.append(f"query_analysis_failed: {e}")
+
+         return {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "errors": errors,
+          }
+       
+    def node_query_rewriter(self, state: AgentState) -> Dict[str, Any]:
+        errors = list(state.get("errors", []))
+
+        try:
+           rewrite = self.query_rewriter.rewrite(
+              question=state["question"],
+              query_type=state["query_type"],
+              complexity=state["complexity"],
+              symbols=state["symbols"],
+          )
  
+           logger.info(
+              "Rewritten queries: %s",
+              rewrite.queries,
+           )
+
+           return {
+             "rewritten_queries": rewrite.queries,
+             "errors": errors,
+          }
+
+        except Exception as e:
+            logger.error(
+             "Query rewriting node failed: %s",
+             e,
+             exc_info=True,
+         )
+
+            errors.append(f"query_rewrite_failed: {e}")
+
+            return {
+              "rewritten_queries": [state["question"]],
+              "errors": errors,
+         }
+        
     def node_embed_question(self, state: AgentState) -> Dict[str, Any]:
         errors = list(state.get("errors", []))
         embedding: Optional[List[float]] = None
@@ -309,22 +394,26 @@ class CodeAgent:
             "I couldn't generate an answer due to a repeated error contacting the "
             f"language model: {last_error}. Please try again shortly."
         )
- 
-    # ---- public entrypoint --------------------------------------------------- #
+
  
     def run(self, question: str, repo_url: str) -> str:
-        initial_state: AgentState = {
-            "question": question,
-            "repo_url": repo_url,
-            "question_embedding": None,
-            "vector_results": [],
-            "graph_results": [],
-            "needs_graph_search": False,
-            "errors": [],
-            "answer": "",
-        }
-        final_state = self.workflow.invoke(initial_state)
-        return final_state["answer"]
+     initial_state: AgentState = {
+         "question": question,
+         "repo_url": repo_url,
+         "query_type": "general",
+         "complexity": "simple",
+         "symbols": [],
+         "rewritten_queries": [],
+         "question_embedding": None,
+         "vector_results": [],
+         "graph_results": [],
+         "needs_graph_search": False,
+         "errors": [],
+         "answer": "",
+     }
+
+     final_state = self.workflow.invoke(initial_state)
+     return final_state["answer"]
  
  
 _agent_instance: Optional[CodeAgent] = None
