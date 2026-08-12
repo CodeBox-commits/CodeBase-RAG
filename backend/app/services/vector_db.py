@@ -33,7 +33,20 @@ class QdrantService:
         except Exception as e:
             logger.error(f"❌ Failed to connect to Qdrant on {self.host}:{self.port}")
             raise e
+        
+    @staticmethod
+    def build_repo_filter(repo_url: str) -> Dict[str, Any]:
+      if not repo_url:
+         return None
 
+      return {
+         "must": [
+             {
+                 "key": "repo_url",
+                 "match": {"value": repo_url},
+             }
+         ]
+     }
     def _ensure_collection_exists(self):
         try:
             collection = self.client.get_collection(self.collection_name)

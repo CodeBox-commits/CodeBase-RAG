@@ -7,6 +7,7 @@ from pathlib import Path
 from app.workers.celery_app import celery_app
 from app.services.graph_db import graph_db
 from app.services.vector_db import vector_db
+from app.services.lexical_db import lexical_db
 from app.core.parser import CodeParser
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
@@ -22,6 +23,7 @@ def normalize_repo_url(url: str) -> str:
 def process_repository(self, repo_url: str):
     repo_url = normalize_repo_url(repo_url)
     graph_db.connect()
+    lexical_db.connect()
     
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -53,6 +55,7 @@ def process_repository(self, repo_url: str):
 
     graph_db.delete_repository_data(repo_url)
     vector_db.delete_repository(repo_url)
+    lexical_db.delete_repository(repo_url)
     graph_db.merge_repository(repo_url)
 
     self.update_state(state="CLONING", meta={"step": "Downloading repository"})
@@ -126,7 +129,7 @@ def process_repository(self, repo_url: str):
                 
                 if vector_items:
                     vector_db.upsert_batch(repo_url, relative_path, vector_items)
-                
+                    lexical_db.index_batch(repo_url, relative_path, vector_items)
                 parsed_files_count += 1
                 
             except Exception as e:

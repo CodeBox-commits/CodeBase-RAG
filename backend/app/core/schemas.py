@@ -70,3 +70,9 @@ class QueryRewrite(BaseModel):
         max_length=3,
         description="Retrieval-oriented search queries."
     )
+
+RetrievalStrategy = Literal[
+    "vector",
+    "graph",
+    "hybrid",
+]

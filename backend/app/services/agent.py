@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from typing import TypedDict, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from app.core.schemas import RetrievalStrategy
 from app.services.vector_db import vector_db
+from app.services.hybrid_search import hybrid_search
 from app.services.query_analyzer import QueryAnalyzer
 from app.services.query_rewriter import QueryRewriter
 from app.services.graph_db import graph_db
@@ -52,7 +54,7 @@ class AgentState(TypedDict):
     symbols: List[str]
     vector_results: List[Dict[str, Any]]
     graph_results: List[Dict[str, Any]]
-    needs_graph_search: bool
+    retrieval_strategy: RetrievalStrategy
     errors: List[str]
     answer: str
  
@@ -81,6 +83,7 @@ class CodeAgent:
  
         graph.add_node("query_analyzer", self.node_query_analyzer)
         graph.add_node("query_rewriter", self.node_query_rewriter)
+        graph.add_node("retrieval_router",self.node_retrieval_router,)
         graph.add_node("embed_question", self.node_embed_question)
         graph.add_node("vector_search", self.node_vector_search)
         graph.add_node("graph_search", self.node_graph_search)
@@ -88,8 +91,9 @@ class CodeAgent:
  
         graph.set_entry_point("query_analyzer")
 
-        graph.add_edge("query_analyzer", "embed_question")
-        graph.add_edge("query_rewriter", "embed_question")
+        graph.add_edge("query_analyzer", "query_rewriter")
+        graph.add_edge("query_rewriter", "retrieval_router")
+        graph.add_edge("retrieval_router", "embed_question")
         graph.add_edge("embed_question", "vector_search")
  
         graph.add_conditional_edges(
@@ -106,8 +110,13 @@ class CodeAgent:
         return graph.compile()
  
     @staticmethod
-    def route_after_vector_search(state: AgentState) -> str:
-        return "graph_search" if state.get("needs_graph_search") else "generate_response"
+    def route_after_vector_search(state: AgentState,) -> str:
+        strategy = state["retrieval_strategy"]
+
+        if strategy == "vector":
+            return "generate_response"
+        
+        return "graph_search"
     
     def node_query_analyzer(self, state: AgentState) -> Dict[str, Any]:
        errors = list(state.get("errors", []))
@@ -180,6 +189,31 @@ class CodeAgent:
               "errors": errors,
          }
         
+    def node_retrieval_router(self,state: AgentState,) -> Dict[str, Any]:
+       query_type = state["query_type"]
+
+       if query_type in ("symbol_lookup","implementation",):
+           strategy: RetrievalStrategy = "vector"
+
+       elif query_type == "call_flow":
+           strategy = "graph"
+
+       elif query_type in ("dependency","architecture","bug_analysis",
+       ):
+           strategy = "hybrid"
+
+       else:
+           strategy = "vector"
+
+       logger.info(
+           "Retrieval strategy selected: %s",
+           strategy,
+       )
+
+       return {
+           "retrieval_strategy": strategy,
+       }
+        
     def node_embed_question(self, state: AgentState) -> Dict[str, Any]:
         errors = list(state.get("errors", []))
         embedding: Optional[List[float]] = None
@@ -191,46 +225,58 @@ class CodeAgent:
         return {"question_embedding": embedding, "errors": errors}
  
     def node_vector_search(self, state: AgentState) -> Dict[str, Any]:
-        errors = list(state.get("errors", []))
-        embedding = state.get("question_embedding")
- 
-        if embedding is None:
-            errors.append("vector_search_skipped: no question embedding available")
-            return {"vector_results": [], "needs_graph_search": False, "errors": errors}
- 
-        results: List[Dict[str, Any]] = []
-        try:
-            vector_db.connect(vector_size=len(embedding))
-            search_hits = vector_db.client.search(
-                collection_name=vector_db.collection_name,
-                query_vector=embedding,
-                query_filter=self._build_repo_filter(state["repo_url"]),
-                limit=self.config.vector_top_k,
-                score_threshold=self.config.vector_score_threshold,
-            )
-            results = [
-                {
-                  "symbol": hit.payload.get("symbol"),
-                  "filepath": hit.payload.get("filepath"),
-                  "language": hit.payload.get("language"),
-                  "chunk_type": hit.payload.get("chunk_type"),
-                  "start_line": hit.payload.get("start_line"),
-                  "end_line": hit.payload.get("end_line"),
-                  "code_text": hit.payload.get("code_text", ""),
-                  "score": hit.score,
-               }
-             for hit in search_hits
-         ]
-        except Exception as e:
-            logger.error(f"Vector search node failed: {e}")
+          errors = list(state.get("errors", []))
+          embedding = state.get("question_embedding")
+          results: List[Dict[str, Any]] = []
+
+          if embedding is None:
+             errors.append("vector_search_skipped: no question embedding available")
+             return {"vector_results": results, "errors": errors}
+
+          try:
+             strategy = state["retrieval_strategy"]
+
+             if strategy == "hybrid":
+               results = hybrid_search.search(
+                 query=state["question"],
+                 query_vector=embedding,
+                 repo_url=state["repo_url"],
+                 limit=self.config.vector_top_k,
+             )
+
+             else:
+              vector_db.connect(vector_size=len(embedding))
+
+              search_hits = vector_db.client.search(
+                 collection_name=vector_db.collection_name,
+                 query_vector=embedding,
+                 query_filter=self._build_repo_filter(state["repo_url"]),
+                 limit=self.config.vector_top_k,
+                 score_threshold=self.config.vector_score_threshold,
+              )
+
+              results = [
+                 {
+                     "symbol": hit.payload.get("symbol"),
+                     "filepath": hit.payload.get("filepath"),
+                     "language": hit.payload.get("language"),
+                     "chunk_type": hit.payload.get("chunk_type"),
+                     "start_line": hit.payload.get("start_line"),
+                     "end_line": hit.payload.get("end_line"),
+                     "code_text": hit.payload.get("code_text", ""),
+                     "score": hit.score,
+                 }
+                 for hit in search_hits
+             ]
+
+          except Exception as e:
+            logger.error(f"Retrieval failed: {e}", exc_info=True)
             errors.append(f"vector_search_failed: {e}")
- 
-        symbols_present = any(r.get("symbol") for r in results)
-        return {
+
+          return {
             "vector_results": results,
-            "needs_graph_search": symbols_present,
             "errors": errors,
-        }
+         }
  
     @staticmethod
     def _build_repo_filter(repo_url: str) -> Optional[Dict[str, Any]]:
@@ -407,7 +453,7 @@ class CodeAgent:
          "question_embedding": None,
          "vector_results": [],
          "graph_results": [],
-         "needs_graph_search": False,
+         "retrieval_strategy": "vector",
          "errors": [],
          "answer": "",
      }
