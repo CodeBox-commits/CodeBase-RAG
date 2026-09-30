@@ -1,10 +1,41 @@
+x-backend: &backend
+  build: ./backend
+  env_file: ./backend/.env
+  environment:
+    # Container hostnames; these override the localhost values in backend/.env.
+    - REDIS_URL=redis://redis:6379/0
+    - QDRANT_HOST=qdrant
+    - QDRANT_PORT=6333
+    - NEO4J_URI=bolt://neo4j:7687
+  depends_on:
+    redis:
+      condition: service_healthy
+    neo4j:
+      condition: service_healthy
+    qdrant:
+      condition: service_started
+  restart: unless-stopped
+
 services:
 
+  api:
+    <<: *backend
+    container_name: git_rag_api
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+
+  worker:
+    <<: *backend
+    container_name: git_rag_worker
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
+
   redis:
-    image: redis:7-alpine
+    image: redis/redis-stack:latest
     container_name: git_rag_redis
     ports:
       - "6379:6379"
+      - "8001:8001"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

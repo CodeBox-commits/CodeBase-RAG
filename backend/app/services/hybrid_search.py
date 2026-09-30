@@ -1,47 +1,82 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from app.services.vector_db import vector_db
-from app.services.lexical_db import lexical_db
+from app.services.lexical_db import lexical_db, DEFAULT_FIELDS
 
 logger = logging.getLogger(__name__)
 
+RankedList = Tuple[str, List[Dict[str, Any]]]
+
+
 class HybridSearch:
-    def __init__(self, rrf_k: int = 60):
+    def __init__(self, rrf_k: int = 60, candidates_per_list: int = 20):
         self.rrf_k = rrf_k
+        self.candidates_per_list = candidates_per_list
 
-    def search(self, query: str, query_vector: List[float], repo_url: str, limit: int = 10) -> List[Dict[str, Any]]:
-        vector_results = self._vector_search(query_vector, repo_url)
-        lexical_results = lexical_db.search(query, repo_url, limit=20)
-        return self._rrf_fuse(vector_results, lexical_results)[:limit]
-
-    def _vector_search(self, query_vector: List[float], repo_url: str) -> List[Dict[str, Any]]:
-        vector_db.connect(vector_size=len(query_vector))
-        hits = vector_db.client.search(
-            collection_name=vector_db.collection_name,
-            query_vector=query_vector,
-            query_filter=vector_db.build_repo_filter(repo_url),
-            limit=20,
-        )
-        return [
-            {**hit.payload, "vector_score": hit.score}
-            for hit in hits
+    def search(
+        self,
+        query_vectors: List[List[float]],
+        lexical_terms: List[str],
+        repo_url: str,
+        limit: int = 10,
+        score_threshold: Optional[float] = None,
+        lexical_fields: Sequence[str] = DEFAULT_FIELDS,
+    ) -> List[Dict[str, Any]]:
+        """One vector list per query embedding plus one BM25 list, fused with RRF."""
+        ranked_lists: List[RankedList] = [
+            ("vector", vector_db.search(
+                vector,
+                repo_url,
+                limit=self.candidates_per_list,
+                score_threshold=score_threshold,
+            ))
+            for vector in query_vectors
         ]
 
-    def _rrf_fuse(self, vector_results, lexical_results):
-        fused = {}
+        if lexical_terms:
+            try:
+                ranked_lists.append((
+                    "bm25",
+                    lexical_db.search(
+                        lexical_terms,
+                        repo_url,
+                        limit=self.candidates_per_list,
+                        fields=lexical_fields,
+                    ),
+                ))
+            except Exception as e:
+                # Lexical is a recall booster; don't lose the vector results over it.
+                logger.warning("Lexical search failed, continuing with vector results only: %s", e)
 
-        for rank, result in enumerate(vector_results, 1):
-            key = self._key(result)
-            fused.setdefault(key, {**result, "rrf_score": 0.0, "sources": []})
-            fused[key]["rrf_score"] += 1 / (self.rrf_k + rank)
-            fused[key]["sources"].append("vector")
+        return self.fuse(ranked_lists)[:limit]
 
-        for rank, result in enumerate(lexical_results, 1):
-            key = self._key(result)
-            fused.setdefault(key, {**result, "rrf_score": 0.0, "sources": []})
-            fused[key]["rrf_score"] += 1 / (self.rrf_k + rank)
-            fused[key]["sources"].append("bm25")
+    def fuse(self, ranked_lists: List[RankedList]) -> List[Dict[str, Any]]:
+        """Reciprocal Rank Fusion.
+
+        Every returned result has the same shape:
+        - score: fused RRF score normalised to 0..1 (1.0 = ranked first in every list)
+        - rrf_score: the raw RRF sum
+        - sources: which retrievers found it
+        - vector_score / bm25_score: best raw score from that retriever, when present
+        """
+        fused: Dict[str, Dict[str, Any]] = {}
+
+        for source, results in ranked_lists:
+            for rank, result in enumerate(results, 1):
+                key = self._key(result)
+                entry = fused.setdefault(key, {**result, "rrf_score": 0.0, "sources": []})
+                entry["rrf_score"] += 1 / (self.rrf_k + rank)
+                if source not in entry["sources"]:
+                    entry["sources"].append(source)
+                raw_key = f"{source}_score"
+                raw_score = result.get("score")
+                if raw_score is not None:
+                    entry[raw_key] = max(entry.get(raw_key, raw_score), raw_score)
+
+        max_possible = len(ranked_lists) / (self.rrf_k + 1) if ranked_lists else 1.0
+        for entry in fused.values():
+            entry["score"] = entry["rrf_score"] / max_possible
 
         return sorted(fused.values(), key=lambda x: x["rrf_score"], reverse=True)
 

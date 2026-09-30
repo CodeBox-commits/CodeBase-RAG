@@ -2,7 +2,7 @@ import os
 import uuid
 import time
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
@@ -35,18 +35,13 @@ class QdrantService:
             raise e
         
     @staticmethod
-    def build_repo_filter(repo_url: str) -> Dict[str, Any]:
+    def build_repo_filter(repo_url: str) -> Optional[models.Filter]:
       if not repo_url:
          return None
 
-      return {
-         "must": [
-             {
-                 "key": "repo_url",
-                 "match": {"value": repo_url},
-             }
-         ]
-     }
+      return models.Filter(
+         must=[models.FieldCondition(key="repo_url", match=models.MatchValue(value=repo_url))]
+      )
     def _ensure_collection_exists(self):
         try:
             collection = self.client.get_collection(self.collection_name)
@@ -64,6 +59,35 @@ class QdrantService:
                 )
             else:
                 raise e
+
+    def search(
+        self,
+        query_vector: List[float],
+        repo_url: str,
+        limit: int = 20,
+        score_threshold: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        self.connect(vector_size=len(query_vector))
+        hits = self.client.query_points(
+            collection_name=self.collection_name,
+            query=query_vector,
+            query_filter=self.build_repo_filter(repo_url),
+            limit=limit,
+            score_threshold=score_threshold,
+        ).points
+        return [
+            {
+                "symbol": hit.payload.get("symbol"),
+                "filepath": hit.payload.get("filepath"),
+                "language": hit.payload.get("language"),
+                "chunk_type": hit.payload.get("chunk_type"),
+                "start_line": hit.payload.get("start_line"),
+                "end_line": hit.payload.get("end_line"),
+                "code_text": hit.payload.get("code_text", ""),
+                "score": hit.score,
+            }
+            for hit in hits
+        ]
 
     def _generate_deterministic_uuid(self, unique_string: str) -> str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, unique_string))

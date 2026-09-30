@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, HttpUrl, Field
 from starlette.concurrency import run_in_threadpool
 from app.services.agent import CodeAgent, get_agent
+from app.core.urls import normalize_repo_url
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ async def ask_codebase(
     agent: CodeAgent = Depends(get_agent)
 ):
 
-    str_repo_url = str(payload.repo_url)
+    str_repo_url = normalize_repo_url(str(payload.repo_url))
 
     if payload.stream:
         return StreamingResponse(

@@ -2,29 +2,99 @@ import os
 import logging
 from typing import Any, Dict, List
 from neo4j import GraphDatabase, exceptions
+from app.core.call_resolver import Edge, Relationships
+from app.core.schemas import ExtractedChunk
 
 logger = logging.getLogger(__name__)
+
+# Graph model:
+#   (:Repository {url})
+#   (:Symbol:Class | :Symbol:Function[:Method] {repo_url, filepath, qualified_name, name, ...})
+#   (Repository)-[:CONTAINS_CLASS|CONTAINS_FUNCTION]->(Symbol)
+#   (Class)-[:HAS_METHOD]->(Method)
+#   (Symbol)-[:CALLS]->(Symbol)     resolved in-repo calls only
+#   (Class)-[:INHERITS]->(Class)
+
+_SCHEMA_STATEMENTS = [
+    "CREATE INDEX symbol_identity IF NOT EXISTS FOR (n:Symbol) ON (n.repo_url, n.filepath, n.qualified_name)",
+    "CREATE INDEX symbol_name IF NOT EXISTS FOR (n:Symbol) ON (n.repo_url, n.name)",
+    "CREATE INDEX repository_url IF NOT EXISTS FOR (r:Repository) ON (r.url)",
+]
+
+_EDGE_TYPES = ("CALLS", "INHERITS", "HAS_METHOD")
+_EDGE_BATCH_SIZE = 1000
+
+_CONTEXT_QUERY = """
+CALL {
+    UNWIND $anchors AS a
+    MATCH (n:Symbol {repo_url: $repo_url, filepath: a.filepath, qualified_name: a.symbol})
+    RETURN n
+    UNION
+    MATCH (n:Symbol)
+    WHERE n.repo_url = $repo_url AND (n.name IN $names OR n.qualified_name IN $names)
+    RETURN n
+}
+WITH DISTINCT n
+LIMIT $anchor_limit
+CALL {
+    WITH n
+    OPTIONAL MATCH p = (n)-[:CALLS*1..__MAX_DEPTH__]->(m:Symbol)
+    WITH m, min(length(p)) AS hops
+    WHERE m IS NOT NULL
+    WITH m, hops ORDER BY hops, m.qualified_name
+    RETURN collect({name: m.qualified_name, filepath: m.filepath, line: m.start_line, hops: hops})[..$fanout] AS calls
+}
+CALL {
+    WITH n
+    OPTIONAL MATCH p = (m:Symbol)-[:CALLS*1..__MAX_DEPTH__]->(n)
+    WITH m, min(length(p)) AS hops
+    WHERE m IS NOT NULL
+    WITH m, hops ORDER BY hops, m.qualified_name
+    RETURN collect({name: m.qualified_name, filepath: m.filepath, line: m.start_line, hops: hops})[..$fanout] AS called_by
+}
+RETURN
+    labels(n)            AS node_labels,
+    n.qualified_name     AS name,
+    n.filepath           AS filepath,
+    n.start_line         AS start_line,
+    n.end_line           AS end_line,
+    n.docstring          AS docstring,
+    calls,
+    called_by,
+    head([(o:Class)-[:HAS_METHOD]->(n) | o.qualified_name])             AS owner,
+    [(n)-[:INHERITS]->(b:Class) | b.qualified_name]                    AS bases,
+    [(s:Class)-[:INHERITS]->(n) | s.qualified_name][..$fanout]         AS subclasses,
+    [(n)-[:HAS_METHOD]->(meth) | meth.qualified_name][..$fanout]       AS methods
+"""
+
 
 class Neo4jService:
     def __init__(self):
         self.uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
         self.user = os.getenv("NEO4J_USER", "neo4j")
-        self.password = os.getenv("NEO4J_PASSWORD", "password")
+        self.password = os.getenv("NEO4J_PASSWORD", "password123")
         self.driver = None
 
     def connect(self):
         if not self.driver:
             try:
                 self.driver = GraphDatabase.driver(
-                    self.uri, 
+                    self.uri,
                     auth=(self.user, self.password),
-                    max_connection_pool_size=50 
+                    max_connection_pool_size=50
                 )
                 self.driver.verify_connectivity()
+                self._ensure_schema()
                 logger.info("✅ Neo4j Connection Pool Initialized.")
             except exceptions.ServiceUnavailable as e:
+                self.driver = None
                 logger.error("❌ Failed to connect to Neo4j. Is the container running?")
                 raise e
+
+    def _ensure_schema(self):
+        with self.driver.session() as session:
+            for statement in _SCHEMA_STATEMENTS:
+                session.run(statement).consume()
 
     def close(self):
         if self.driver:
@@ -38,51 +108,112 @@ class Neo4jService:
         RETURN id(r)
         """
         with self.driver.session() as session:
-            session.execute_write(lambda tx: tx.run(query, url=repo_url))
+            session.execute_write(lambda tx: tx.run(query, url=repo_url).consume())
 
     def delete_repository_data(self, repo_url: str):
-        query = """
-        MATCH (r:Repository {url: $repo_url})
-        DETACH DELETE r
-        WITH 1 AS dummy
-        MATCH (n) WHERE n.repo_url = $repo_url
-        DETACH DELETE n
+        # Function/UnresolvedCall cover nodes written by the pre-Symbol schema.
+        # CALL {} IN TRANSACTIONS needs an auto-commit transaction, hence session.run.
+        symbols_query = """
+        MATCH (n)
+        WHERE (n:Symbol OR n:Function OR n:UnresolvedCall) AND n.repo_url = $repo_url
+        CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 1000 ROWS
         """
+        repo_query = "MATCH (r:Repository {url: $repo_url}) DETACH DELETE r"
         with self.driver.session() as session:
-            session.execute_write(lambda tx: tx.run(query, repo_url=repo_url))
+            session.run(symbols_query, repo_url=repo_url).consume()
+            session.run(repo_query, repo_url=repo_url).consume()
 
-    def merge_function(self, repo_url: str, file_path: str, chunk_data: Dict[str, Any]):
+    def merge_symbols(self, repo_url: str, chunks: List[ExtractedChunk]):
+        if not chunks:
+            return
         query = """
         MATCH (r:Repository {url: $repo_url})
-        
-        MERGE (f:Function {repo_url: $repo_url, filepath: $file_path, name: $name})
-        SET f.docstring = $docstring,
-            f.start_line = $start_line,
-            f.end_line = $end_line,
-            f.type = $type
-            
-        MERGE (r)-[:CONTAINS_FUNCTION]->(f)
-        
-        FOREACH (ignoreMe IN CASE WHEN $type = 'method' THEN [1] ELSE [] END |
-            SET f:Method
+        UNWIND $rows AS row
+        MERGE (n:Symbol {repo_url: $repo_url, filepath: row.filepath, qualified_name: row.qualified_name})
+        SET n.name = row.name,
+            n.type = row.type,
+            n.docstring = row.docstring,
+            n.start_line = row.start_line,
+            n.end_line = row.end_line
+        FOREACH (_ IN CASE WHEN row.type = 'class' THEN [1] ELSE [] END |
+            SET n:Class
+            MERGE (r)-[:CONTAINS_CLASS]->(n)
         )
-        
-        WITH f, $repo_url AS repo_url
-        UNWIND $calls AS callee_name
-        MERGE (callee:UnresolvedCall {name: callee_name, repo_url: repo_url})
-        MERGE (f)-[:CALLS]->(callee)
+        FOREACH (_ IN CASE WHEN row.type <> 'class' THEN [1] ELSE [] END |
+            SET n:Function
+            MERGE (r)-[:CONTAINS_FUNCTION]->(n)
+        )
+        FOREACH (_ IN CASE WHEN row.type = 'method' THEN [1] ELSE [] END |
+            SET n:Method
+        )
         """
+        rows = [
+            {
+                "filepath": c.file_path,
+                "qualified_name": c.qualified_name,
+                "name": c.name,
+                "type": c.type,
+                "docstring": c.docstring,
+                "start_line": c.start_line,
+                "end_line": c.end_line,
+            }
+            for c in chunks
+        ]
         with self.driver.session() as session:
-            session.execute_write(lambda tx: tx.run(
+            session.execute_write(lambda tx: tx.run(query, repo_url=repo_url, rows=rows).consume())
+
+    def merge_relationships(self, repo_url: str, relationships: Relationships):
+        self._merge_edges(repo_url, "CALLS", relationships.calls)
+        self._merge_edges(repo_url, "INHERITS", relationships.inherits)
+        self._merge_edges(repo_url, "HAS_METHOD", relationships.has_method)
+
+    def _merge_edges(self, repo_url: str, rel_type: str, edges: List[Edge]):
+        if rel_type not in _EDGE_TYPES:
+            raise ValueError(f"Unknown relationship type: {rel_type}")
+        if not edges:
+            return
+        query = f"""
+        UNWIND $edges AS e
+        MATCH (a:Symbol {{repo_url: $repo_url, filepath: e.src_file, qualified_name: e.src_name}})
+        MATCH (b:Symbol {{repo_url: $repo_url, filepath: e.dst_file, qualified_name: e.dst_name}})
+        MERGE (a)-[:{rel_type}]->(b)
+        """
+        rows = [
+            {"src_file": src[0], "src_name": src[1], "dst_file": dst[0], "dst_name": dst[1]}
+            for src, dst in edges
+        ]
+        with self.driver.session() as session:
+            for i in range(0, len(rows), _EDGE_BATCH_SIZE):
+                batch = rows[i:i + _EDGE_BATCH_SIZE]
+                session.execute_write(lambda tx: tx.run(query, repo_url=repo_url, edges=batch).consume())
+
+    def get_symbol_context(
+        self,
+        repo_url: str,
+        anchors: List[Dict[str, str]],
+        names: List[str],
+        max_depth: int = 3,
+        anchor_limit: int = 15,
+        fanout: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Structural neighbourhood of the given symbols.
+
+        anchors: exact symbols ({"filepath", "symbol"}) e.g. from vector hits.
+        names:   bare or qualified names e.g. extracted from the user's question.
+        """
+        if not anchors and not names:
+            return []
+        # Variable-length bounds can't be query parameters; int() keeps this injection-safe.
+        query = _CONTEXT_QUERY.replace("__MAX_DEPTH__", str(int(max_depth)))
+        with self.driver.session() as session:
+            result = session.run(
                 query,
                 repo_url=repo_url,
-                file_path=file_path,
-                name=chunk_data.get("name"),
-                type=chunk_data.get("type"),
-                start_line=chunk_data.get("start_line"),
-                end_line=chunk_data.get("end_line"),
-                docstring=chunk_data.get("docstring"),
-                calls=chunk_data.get("calls", [])
-            ))
+                anchors=anchors,
+                names=names,
+                anchor_limit=anchor_limit,
+                fanout=fanout,
+            )
+            return [record.data() for record in result]
 
 graph_db = Neo4jService()

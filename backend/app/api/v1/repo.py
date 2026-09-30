@@ -4,6 +4,7 @@ from celery.result import AsyncResult
 from typing import Dict, Any
 from app.workers.celery_app import celery_app
 from app.workers.tasks import process_repository
+from app.core.urls import normalize_repo_url
 
 router = APIRouter()
 
@@ -12,12 +13,13 @@ class RepoIndexRequest(BaseModel):
 
 @router.post("/index")
 async def index_repository(request: RepoIndexRequest):
-    task = process_repository.delay(str(request.repo_url))
+    repo_url = normalize_repo_url(str(request.repo_url))
+    task = process_repository.delay(repo_url)
     
     return {
         "message": "Repository ingestion task submitted successfully.",
         "task_id": task.id,
-        "repo_url": str(request.repo_url)
+        "repo_url": repo_url
     }
 
 @router.get("/status/{task_id}")
@@ -32,7 +34,7 @@ async def get_task_status(task_id: str):
     if task_result.state == "PENDING":
         response["message"] = "Task is waiting in the queue for an available worker."
     
-    elif task_result.state in ["CLONING", "PARSING"]:
+    elif task_result.state in ["CLONING", "PARSING", "LINKING"]:
         meta = task_result.info or {}
         response["message"] = meta.get("step", "Processing...")
         

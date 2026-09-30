@@ -8,11 +8,18 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 from app.core.schemas import RetrievalStrategy
 from app.services.vector_db import vector_db
 from app.services.hybrid_search import hybrid_search
+from app.services.lexical_db import DEFAULT_FIELDS, LexicalDB
 from app.services.query_analyzer import QueryAnalyzer
 from app.services.query_rewriter import QueryRewriter
 from app.services.graph_db import graph_db
 
 logger = logging.getLogger(__name__)
+
+
+def hybrid_search_terms(queries: List[str], symbols: List[str]) -> List[str]:
+    # Symbols first so they survive the term cap.
+    return LexicalDB.extract_terms([*symbols, *queries])
+
  
 @dataclass(frozen=True)
 class AgentConfig:
@@ -21,9 +28,13 @@ class AgentConfig:
     api_key: str
     vector_top_k: int = 8
     vector_score_threshold: float = 0.25
-    graph_hop_limit: int = 15
+    max_query_embeddings: int = 4
+    graph_anchor_limit: int = 15
+    graph_max_depth: int = 3
+    graph_fanout: int = 10
     max_output_tokens: int = 2048
-    llm_retries: int = 2
+    # The Google SDK already retries 429/503 with backoff; retrying again here only burns quota.
+    llm_retries: int = 0
     llm_retry_backoff_seconds: float = 1.5
  
     @classmethod
@@ -34,12 +45,15 @@ class AgentConfig:
                 "GEMINI_API_KEY is not set. The code agent cannot start without it."
             )
         return cls(
-            llm_model=os.getenv("LLM_MODEL", "gemini-1.5-flash"),
-            embedding_model=os.getenv("EMBEDDING_MODEL", "models/text-embedding-004"),
+            llm_model=os.getenv("LLM_MODEL", "gemini-3.5-flash-lite"),
+            embedding_model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
             api_key=api_key,
             vector_top_k=int(os.getenv("VECTOR_TOP_K", "8")),
             vector_score_threshold=float(os.getenv("VECTOR_SCORE_THRESHOLD", "0.25")),
-            graph_hop_limit=int(os.getenv("GRAPH_HOP_LIMIT", "15")),
+            max_query_embeddings=int(os.getenv("MAX_QUERY_EMBEDDINGS", "4")),
+            graph_anchor_limit=int(os.getenv("GRAPH_ANCHOR_LIMIT", "15")),
+            graph_max_depth=int(os.getenv("GRAPH_MAX_DEPTH", "3")),
+            graph_fanout=int(os.getenv("GRAPH_FANOUT", "10")),
             max_output_tokens=int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "2048")),
         )
     
@@ -47,7 +61,7 @@ class AgentConfig:
 class AgentState(TypedDict):
     question: str
     repo_url: str
-    question_embedding: Optional[List[float]]
+    query_embeddings: List[List[float]]
     rewritten_queries: List[str]
     query_type: str
     complexity: str
@@ -74,6 +88,7 @@ class CodeAgent:
         self.embeddings = GoogleGenerativeAIEmbeddings(
             model=self.config.embedding_model,
             google_api_key=self.config.api_key,
+            output_dimensionality=vector_db.vector_size,
         )
         self.workflow = self._build_workflow()
  
@@ -84,21 +99,21 @@ class CodeAgent:
         graph.add_node("query_analyzer", self.node_query_analyzer)
         graph.add_node("query_rewriter", self.node_query_rewriter)
         graph.add_node("retrieval_router",self.node_retrieval_router,)
-        graph.add_node("embed_question", self.node_embed_question)
-        graph.add_node("vector_search", self.node_vector_search)
+        graph.add_node("embed_queries", self.node_embed_queries)
+        graph.add_node("retrieve", self.node_retrieve)
         graph.add_node("graph_search", self.node_graph_search)
         graph.add_node("generate_response", self.node_generate_response)
- 
+
         graph.set_entry_point("query_analyzer")
 
         graph.add_edge("query_analyzer", "query_rewriter")
         graph.add_edge("query_rewriter", "retrieval_router")
-        graph.add_edge("retrieval_router", "embed_question")
-        graph.add_edge("embed_question", "vector_search")
- 
+        graph.add_edge("retrieval_router", "embed_queries")
+        graph.add_edge("embed_queries", "retrieve")
+
         graph.add_conditional_edges(
-            "vector_search",
-            self.route_after_vector_search,
+            "retrieve",
+            self.route_after_retrieval,
             {
                 "graph_search": "graph_search",
                 "generate_response": "generate_response",
@@ -110,7 +125,7 @@ class CodeAgent:
         return graph.compile()
  
     @staticmethod
-    def route_after_vector_search(state: AgentState,) -> str:
+    def route_after_retrieval(state: AgentState,) -> str:
         strategy = state["retrieval_strategy"]
 
         if strategy == "vector":
@@ -214,120 +229,90 @@ class CodeAgent:
            "retrieval_strategy": strategy,
        }
         
-    def node_embed_question(self, state: AgentState) -> Dict[str, Any]:
+    def _search_queries(self, state: AgentState) -> List[str]:
+        """Original question plus the rewriter's retrieval queries, de-duplicated."""
+        queries: List[str] = []
+        for q in [state["question"], *state.get("rewritten_queries", [])]:
+            q = (q or "").strip()
+            if q and q.lower() not in {existing.lower() for existing in queries}:
+                queries.append(q)
+        return queries[: self.config.max_query_embeddings]
+
+    def node_embed_queries(self, state: AgentState) -> Dict[str, Any]:
         errors = list(state.get("errors", []))
-        embedding: Optional[List[float]] = None
-        try:
-            embedding = self.embeddings.embed_query(state["question"])
-        except Exception as e:
-            logger.error(f"Question embedding failed: {e}")
-            errors.append(f"embedding_failed: {e}")
-        return {"question_embedding": embedding, "errors": errors}
+        embeddings: List[List[float]] = []
+        for query in self._search_queries(state):
+            try:
+                embeddings.append(self.embeddings.embed_query(query))
+            except Exception as e:
+                logger.error(f"Query embedding failed for {query!r}: {e}")
+                errors.append(f"embedding_failed: {e}")
+        return {"query_embeddings": embeddings, "errors": errors}
  
-    def node_vector_search(self, state: AgentState) -> Dict[str, Any]:
-          errors = list(state.get("errors", []))
-          embedding = state.get("question_embedding")
-          results: List[Dict[str, Any]] = []
+    def node_retrieve(self, state: AgentState) -> Dict[str, Any]:
+        errors = list(state.get("errors", []))
+        embeddings = state.get("query_embeddings") or []
+        strategy = state["retrieval_strategy"]
+        symbols = state.get("symbols", [])
+        results: List[Dict[str, Any]] = []
 
-          if embedding is None:
-             errors.append("vector_search_skipped: no question embedding available")
-             return {"vector_results": results, "errors": errors}
+        if strategy == "hybrid":
+            # Full BM25 over symbol, path and code text using every retrieval query.
+            lexical_terms = hybrid_search_terms(self._search_queries(state), symbols)
+            lexical_fields = DEFAULT_FIELDS
+        else:
+            # Exact names are where embeddings are weakest, so an explicitly named
+            # symbol always gets a symbol-field lexical lookup.
+            lexical_terms = hybrid_search_terms([], symbols)
+            lexical_fields = ("symbol",)
 
-          try:
-             strategy = state["retrieval_strategy"]
+        if not embeddings and not lexical_terms:
+            errors.append("retrieval_skipped: no query embeddings or lexical terms available")
+            return {"vector_results": results, "errors": errors}
 
-             if strategy == "hybrid":
-               results = hybrid_search.search(
-                 query=state["question"],
-                 query_vector=embedding,
-                 repo_url=state["repo_url"],
-                 limit=self.config.vector_top_k,
-             )
-
-             else:
-              vector_db.connect(vector_size=len(embedding))
-
-              search_hits = vector_db.client.search(
-                 collection_name=vector_db.collection_name,
-                 query_vector=embedding,
-                 query_filter=self._build_repo_filter(state["repo_url"]),
-                 limit=self.config.vector_top_k,
-                 score_threshold=self.config.vector_score_threshold,
-              )
-
-              results = [
-                 {
-                     "symbol": hit.payload.get("symbol"),
-                     "filepath": hit.payload.get("filepath"),
-                     "language": hit.payload.get("language"),
-                     "chunk_type": hit.payload.get("chunk_type"),
-                     "start_line": hit.payload.get("start_line"),
-                     "end_line": hit.payload.get("end_line"),
-                     "code_text": hit.payload.get("code_text", ""),
-                     "score": hit.score,
-                 }
-                 for hit in search_hits
-             ]
-
-          except Exception as e:
+        try:
+            results = hybrid_search.search(
+                query_vectors=embeddings,
+                lexical_terms=lexical_terms,
+                repo_url=state["repo_url"],
+                limit=self.config.vector_top_k,
+                score_threshold=self.config.vector_score_threshold,
+                lexical_fields=lexical_fields,
+            )
+        except Exception as e:
             logger.error(f"Retrieval failed: {e}", exc_info=True)
-            errors.append(f"vector_search_failed: {e}")
+            errors.append(f"retrieval_failed: {e}")
 
-          return {
+        return {
             "vector_results": results,
             "errors": errors,
-         }
- 
-    @staticmethod
-    def _build_repo_filter(repo_url: str) -> Optional[Dict[str, Any]]:
-        if not repo_url:
-            return None
-        return {
-            "must": [
-                {"key": "repo_url", "match": {"value": repo_url}}
-            ]
         }
  
     def node_graph_search(self, state: AgentState) -> Dict[str, Any]:
         errors = list(state.get("errors", []))
-        repo_url = state["repo_url"]
-        vector_results = state.get("vector_results", [])
-        symbols = sorted({item["symbol"] for item in vector_results if item.get("symbol")})
- 
-        if not symbols:
+        anchors = [
+            {"filepath": item["filepath"], "symbol": item["symbol"]}
+            for item in state.get("vector_results", [])
+            if item.get("filepath") and item.get("symbol")
+        ]
+        names = sorted(set(state.get("symbols", [])))
+
+        if not anchors and not names:
             return {"graph_results": [], "errors": errors}
- 
-        graph_db.connect()
-        if not graph_db.driver:
-            errors.append("graph_search_skipped: no graph db connection")
-            return {"graph_results": [], "errors": errors}
-        query = """
-        MATCH (r:Repository {url: $repo_url})-[:CONTAINS_CLASS|CONTAINS_FUNCTION*1..2]->(n)
-        WHERE n.name IN $symbols
-        OPTIONAL MATCH (n)-[:CALLS]->(callee)
-        OPTIONAL MATCH (caller)-[:CALLS]->(n)
-        RETURN
-            labels(n)          AS node_labels,
-            n.name              AS name,
-            n.filepath          AS filepath,
-            n.start_line        AS start_line,
-            n.docstring         AS docstring,
-            collect(DISTINCT callee.name)  AS calls,
-            collect(DISTINCT caller.name)  AS called_by
-        LIMIT $limit
-        """
+
         graph_context: List[Dict[str, Any]] = []
         try:
-            with graph_db.driver.session() as session:
-                res = session.run(
-                    query,
-                    repo_url=repo_url,
-                    symbols=symbols,
-                    limit=self.config.graph_hop_limit,
-                )
-                graph_context = [record.data() for record in res]
+            graph_db.connect()
+            graph_context = graph_db.get_symbol_context(
+                repo_url=state["repo_url"],
+                anchors=anchors,
+                names=names,
+                max_depth=self.config.graph_max_depth,
+                anchor_limit=self.config.graph_anchor_limit,
+                fanout=self.config.graph_fanout,
+            )
         except Exception as e:
-            logger.error(f"Graph search node failed: {e}")
+            logger.error(f"Graph search node failed: {e}", exc_info=True)
             errors.append(f"graph_search_failed: {e}")
  
         return {"graph_results": graph_context, "errors": errors}
@@ -393,7 +378,7 @@ class CodeAgent:
             f"Symbol: {v.get('symbol', 'unknown')}\n"
             f"Language: {v.get('language', 'unknown')}\n"
             f"Chunk Type: {v.get('chunk_type', 'unknown')}\n"
-            f"Relevance Score: {v.get('score', 0):.3f}\n"
+            f"Relevance Score: {v.get('score', 0):.3f} (via {', '.join(v.get('sources', [])) or 'unknown'})\n"
             f"Code:\n```\n{v.get('code_text', '')}\n```"
          )
 
@@ -401,22 +386,34 @@ class CodeAgent:
  
     @staticmethod
     def _format_graph_context(graph_results: List[Dict[str, Any]]) -> str:
+        def fmt_neighbours(items: List[Dict[str, Any]]) -> str:
+            parts = []
+            for item in items:
+                hops = item.get("hops") or 1
+                suffix = "" if hops == 1 else f", {hops} hops"
+                parts.append(f"{item.get('name')} ({item.get('filepath')}:{item.get('line')}{suffix})")
+            return ", ".join(parts)
+
         lines = []
         for g in graph_results:
-            label = "/".join(g.get("node_labels") or []) or "Node"
+            labels = [l for l in (g.get("node_labels") or []) if l != "Symbol"]
+            label = "Method" if "Method" in labels else (labels[0] if labels else "Node")
             line = (
                 f"{label} '{g.get('name')}' defined in {g.get('filepath')} "
-                f"(Line {g.get('start_line')})"
+                f"(Lines {g.get('start_line')}-{g.get('end_line')})"
             )
+            if g.get("owner"):
+                line += f" | Member of class: {g['owner']}"
             if g.get("docstring"):
                 line += f" | Docstring: {g['docstring']}"
-            for rel_key, rel_label in (
-                ("calls", "Calls"),
-                ("called_by", "Called by"),
-            ):
-                values = [v for v in (g.get(rel_key) or []) if v]
+            for key, title in (("bases", "Inherits from"), ("subclasses", "Subclassed by"), ("methods", "Methods")):
+                values = [v for v in (g.get(key) or []) if v]
                 if values:
-                    line += f" | {rel_label}: {', '.join(values)}"
+                    line += f" | {title}: {', '.join(values)}"
+            if g.get("calls"):
+                line += f" | Calls: {fmt_neighbours(g['calls'])}"
+            if g.get("called_by"):
+                line += f" | Called by: {fmt_neighbours(g['called_by'])}"
             lines.append(line)
         return "\n".join(lines)
  
@@ -429,17 +426,23 @@ class CodeAgent:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content},
                 ])
-                return response.content
+                # Gemini 3 returns content as a list of parts; .text flattens it to a string.
+                return response.text
             except Exception as e:
                 last_error = e
                 logger.error(f"Gemini LLM generation failed (attempt {attempt + 1}): {e}")
                 if attempt < self.config.llm_retries:
                     time.sleep(self.config.llm_retry_backoff_seconds * (attempt + 1))
  
-        return (
-            "I couldn't generate an answer due to a repeated error contacting the "
-            f"language model: {last_error}. Please try again shortly."
-        )
+        # Full error is logged above; the user gets a short, readable reason.
+        reason = str(last_error)
+        if "RESOURCE_EXHAUSTED" in reason or "429" in reason:
+            detail = "the model's rate limit or quota was reached"
+        elif "UNAVAILABLE" in reason or "503" in reason:
+            detail = "the model is temporarily overloaded"
+        else:
+            detail = "the language model returned an error"
+        return f"I couldn't generate an answer because {detail}. Please try again in a minute."
 
  
     def run(self, question: str, repo_url: str) -> str:
@@ -450,7 +453,7 @@ class CodeAgent:
          "complexity": "simple",
          "symbols": [],
          "rewritten_queries": [],
-         "question_embedding": None,
+         "query_embeddings": [],
          "vector_results": [],
          "graph_results": [],
          "retrieval_strategy": "vector",

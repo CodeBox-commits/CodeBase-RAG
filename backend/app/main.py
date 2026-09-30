@@ -2,22 +2,17 @@ import os
 import uuid
 import time
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.api.v1.repo import router as repo_router
 from app.api.v1.chat import router as chat_router
 from app.services.graph_db import graph_db
 from app.services.vector_db import vector_db
-
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s | %(levelname)s | [%(name)s] | trace_id=%(trace_id)s | %(message)s"
-)
-logger = logging.getLogger("codebase_rag")
-
 
 class TraceIDLogFilter(logging.Filter):
     def filter(self, record):
@@ -25,7 +20,15 @@ class TraceIDLogFilter(logging.Filter):
             record.trace_id = "system"
         return True
 
-logger.addFilter(TraceIDLogFilter())
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s | %(levelname)s | [%(name)s] | trace_id=%(trace_id)s | %(message)s"
+)
+# Filter on the root handlers so records from every logger get a trace_id.
+for handler in logging.getLogger().handlers:
+    handler.addFilter(TraceIDLogFilter())
+
+logger = logging.getLogger("codebase_rag")
 
 
 @asynccontextmanager
@@ -116,3 +119,7 @@ async def health_check():
             "qdrant": vector_db.client is not None
         }
     }
+
+
+# Mounted last so API routes, /health and /docs take precedence over the UI.
+app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="ui")

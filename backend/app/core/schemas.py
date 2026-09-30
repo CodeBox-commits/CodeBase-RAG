@@ -6,6 +6,10 @@ class ExtractedChunk(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str = Field(..., description="The functional name or identifier of the code block")
+    qualified_name: str = Field(
+        ...,
+        description="Dotted scope path unique within the file, e.g. 'MyClass.method' or 'outer.inner'"
+    )
     type: Literal["function", "method", "class", "module"] = Field(
         default="function", 
         description="The structural type of the asset"
@@ -19,6 +23,10 @@ class ExtractedChunk(BaseModel):
     calls: List[str] = Field(
         default_factory=list, 
         description="List of direct internal function calls discovered inside this node's scope"
+    )
+    bases: List[str] = Field(
+        default_factory=list,
+        description="Base class references for class chunks, as written in the source"
     )
 
 class RepositoryIndexPayload(BaseModel):
