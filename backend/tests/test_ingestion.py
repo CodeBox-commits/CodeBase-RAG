@@ -6,8 +6,9 @@ from app.workers.tasks import IngestionError, embed_chunks
 
 
 def _chunk(name, path):
-    return ExtractedChunk(name=name, qualified_name=name, file_path=path,
-                          start_line=1, end_line=2, source_code=f"def {name}(): pass")
+    return ExtractedChunk(
+        name=name, qualified_name=name, file_path=path, start_line=1, end_line=2, source_code=f"def {name}(): pass"
+    )
 
 
 class FakeEmbedder:

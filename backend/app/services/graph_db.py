@@ -1,7 +1,9 @@
-import os
 import logging
-from typing import Any, Dict, List
+import os
+from typing import Any
+
 from neo4j import GraphDatabase, exceptions
+
 from app.core.call_resolver import Edge, Relationships
 from app.core.schemas import ExtractedChunk
 
@@ -79,9 +81,7 @@ class Neo4jService:
         if not self.driver:
             try:
                 self.driver = GraphDatabase.driver(
-                    self.uri,
-                    auth=(self.user, self.password),
-                    max_connection_pool_size=50
+                    self.uri, auth=(self.user, self.password), max_connection_pool_size=50
                 )
                 self.driver.verify_connectivity()
                 self._ensure_schema()
@@ -123,7 +123,7 @@ class Neo4jService:
             session.run(symbols_query, repo_url=repo_url).consume()
             session.run(repo_query, repo_url=repo_url).consume()
 
-    def merge_symbols(self, repo_url: str, chunks: List[ExtractedChunk]):
+    def merge_symbols(self, repo_url: str, chunks: list[ExtractedChunk]):
         if not chunks:
             return
         query = """
@@ -167,7 +167,7 @@ class Neo4jService:
         self._merge_edges(repo_url, "INHERITS", relationships.inherits)
         self._merge_edges(repo_url, "HAS_METHOD", relationships.has_method)
 
-    def _merge_edges(self, repo_url: str, rel_type: str, edges: List[Edge]):
+    def _merge_edges(self, repo_url: str, rel_type: str, edges: list[Edge]):
         if rel_type not in _EDGE_TYPES:
             raise ValueError(f"Unknown relationship type: {rel_type}")
         if not edges:
@@ -178,24 +178,21 @@ class Neo4jService:
         MATCH (b:Symbol {{repo_url: $repo_url, filepath: e.dst_file, qualified_name: e.dst_name}})
         MERGE (a)-[:{rel_type}]->(b)
         """
-        rows = [
-            {"src_file": src[0], "src_name": src[1], "dst_file": dst[0], "dst_name": dst[1]}
-            for src, dst in edges
-        ]
+        rows = [{"src_file": src[0], "src_name": src[1], "dst_file": dst[0], "dst_name": dst[1]} for src, dst in edges]
         with self.driver.session() as session:
             for i in range(0, len(rows), _EDGE_BATCH_SIZE):
-                batch = rows[i:i + _EDGE_BATCH_SIZE]
+                batch = rows[i : i + _EDGE_BATCH_SIZE]
                 session.execute_write(lambda tx: tx.run(query, repo_url=repo_url, edges=batch).consume())
 
     def get_symbol_context(
         self,
         repo_url: str,
-        anchors: List[Dict[str, str]],
-        names: List[str],
+        anchors: list[dict[str, str]],
+        names: list[str],
         max_depth: int = 3,
         anchor_limit: int = 15,
         fanout: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Structural neighbourhood of the given symbols.
 
         anchors: exact symbols ({"filepath", "symbol"}) e.g. from vector hits.
@@ -216,7 +213,7 @@ class Neo4jService:
             )
             return [record.data() for record in result]
 
-    def get_repository_graph(self, repo_url: str, limit: int = 400) -> Dict[str, Any]:
+    def get_repository_graph(self, repo_url: str, limit: int = 400) -> dict[str, Any]:
         """The most connected symbols of a repository and the edges between them."""
         nodes_query = """
         MATCH (n:Symbol {repo_url: $repo_url})
@@ -242,5 +239,6 @@ class Neo4jService:
                 "MATCH (n:Symbol {repo_url: $repo_url}) RETURN count(n) AS c", repo_url=repo_url
             ).single()["c"]
         return {"nodes": nodes, "edges": edges, "total_symbols": total}
+
 
 graph_db = Neo4jService()

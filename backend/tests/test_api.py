@@ -37,11 +37,14 @@ def fake_agent():
 
 
 def test_chat_normalises_repo_url_before_querying(client, fake_agent):
-    res = client.post("/api/v1/chat/", json={
-        "question": "What does main do?",
-        "repo_url": "https://github.com/a/b.git",
-        "stream": False,
-    })
+    res = client.post(
+        "/api/v1/chat/",
+        json={
+            "question": "What does main do?",
+            "repo_url": "https://github.com/a/b.git",
+            "stream": False,
+        },
+    )
 
     assert res.status_code == 200
     assert res.json()["repo_url"] == "https://github.com/a/b"
@@ -49,15 +52,19 @@ def test_chat_normalises_repo_url_before_querying(client, fake_agent):
 
 
 def test_chat_streams_sse_events(client, fake_agent):
-    res = client.post("/api/v1/chat/", json={
-        "question": "What does main do?",
-        "repo_url": "https://github.com/a/b",
-    })
+    res = client.post(
+        "/api/v1/chat/",
+        json={
+            "question": "What does main do?",
+            "repo_url": "https://github.com/a/b",
+        },
+    )
 
     events = [e for e in res.text.split("\n\n") if e]
     assert json.loads(events[0].removeprefix("data: "))["node"] == "query_planner"
     assert json.loads(events[1].removeprefix("data: ")) == {
-        "type": "token", "content": "answer for https://github.com/a/b",
+        "type": "token",
+        "content": "answer for https://github.com/a/b",
     }
     assert events[-1] == "data: [DONE]"
 
@@ -73,9 +80,7 @@ def test_index_submits_normalised_url(client, monkeypatch):
     class FakeTask:
         id = "task-123"
 
-    monkeypatch.setattr(
-        repo_module.process_repository, "delay", lambda url: submitted.append(url) or FakeTask()
-    )
+    monkeypatch.setattr(repo_module.process_repository, "delay", lambda url: submitted.append(url) or FakeTask())
 
     res = client.post("/api/v1/repo/index", json={"repo_url": "https://github.com/a/b.git/"})
 

@@ -2,7 +2,7 @@ from app.core.call_resolver import resolve_relationships
 from app.core.parser import CodeParser
 
 FILES = {
-    "app/utils.py": '''
+    "app/utils.py": """
 def helper():
     pass
 
@@ -11,8 +11,8 @@ def format_name(x):
 
 def persist(obj):
     obj.save()               # Base.save or Other.save: ambiguous, must not resolve
-''',
-    "app/models.py": '''
+""",
+    "app/models.py": """
 from app import utils
 
 class Base:
@@ -32,15 +32,15 @@ class User(Base):
 
 def build():
     return User()
-''',
-    "app/other.py": '''
+""",
+    "app/other.py": """
 class Other:
     def save(self):
         pass
 
 def run():
     helper()
-''',
+""",
 }
 
 
@@ -71,7 +71,7 @@ def test_bare_calls_resolve_to_unique_function_and_class_instantiation():
 def test_inherited_self_call_prefers_candidate_in_same_file():
     rel = _relationships()
     targets = [dst for src, dst in rel.calls if src == ("app/models.py", "User.rename")]
-    assert targets == [("app/models.py", "Base.save")]   # not Other.save, not print
+    assert targets == [("app/models.py", "Base.save")]  # not Other.save, not print
 
 
 def test_ambiguous_and_external_calls_are_dropped():

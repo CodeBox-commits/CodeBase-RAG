@@ -1,5 +1,7 @@
 import logging
+
 from langchain_google_genai import ChatGoogleGenerativeAI
+
 from app.core.schemas import QueryPlan
 
 logger = logging.getLogger(__name__)

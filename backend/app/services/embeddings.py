@@ -1,9 +1,10 @@
-import os
-import time
 import hashlib
 import logging
+import os
+import time
 from array import array
-from typing import Dict, List, Optional, Sequence
+from collections.abc import Sequence
+
 import redis
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
@@ -32,7 +33,7 @@ class CachedEmbeddings:
         client: GoogleGenerativeAIEmbeddings,
         model: str,
         dimensions: int,
-        cache: Optional[redis.Redis] = None,
+        cache: redis.Redis | None = None,
         ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
         batch_size: int = 100,
     ):
@@ -43,14 +44,14 @@ class CachedEmbeddings:
         self.ttl_seconds = ttl_seconds
         self.batch_size = batch_size
 
-    def embed_queries(self, texts: Sequence[str]) -> List[List[float]]:
+    def embed_queries(self, texts: Sequence[str]) -> list[list[float]]:
         # The Google SDK already retries 429/503, so a failed query embedding isn't retried here.
         return self._embed(texts, QUERY_TASK, attempts=1)
 
-    def embed_documents(self, texts: Sequence[str]) -> List[List[float]]:
+    def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         return self._embed(texts, DOCUMENT_TASK, attempts=3)
 
-    def _embed(self, texts: Sequence[str], task_type: str, attempts: int) -> List[List[float]]:
+    def _embed(self, texts: Sequence[str], task_type: str, attempts: int) -> list[list[float]]:
         if not texts:
             return []
 
@@ -59,7 +60,7 @@ class CachedEmbeddings:
         cache_hits = sum(vector is not None for vector in vectors)
 
         # Identical texts in one call (e.g. repeated one-line methods) are embedded once.
-        pending: Dict[str, str] = {}
+        pending: dict[str, str] = {}
         for key, text, vector in zip(keys, texts, vectors):
             if vector is None:
                 pending.setdefault(key, text)
@@ -72,14 +73,17 @@ class CachedEmbeddings:
 
         logger.info(
             "Embedded %d %s texts: %d from cache, %d sent to the API",
-            len(texts), task_type, cache_hits, len(pending),
+            len(texts),
+            task_type,
+            cache_hits,
+            len(pending),
         )
         return vectors
 
-    def _call_api(self, texts: List[str], task_type: str, attempts: int) -> List[List[float]]:
-        vectors: List[List[float]] = []
+    def _call_api(self, texts: list[str], task_type: str, attempts: int) -> list[list[float]]:
+        vectors: list[list[float]] = []
         for i in range(0, len(texts), self.batch_size):
-            batch = texts[i:i + self.batch_size]
+            batch = texts[i : i + self.batch_size]
             for attempt in range(attempts):
                 try:
                     result = self.client.embed_documents(batch, task_type=task_type)
@@ -87,7 +91,7 @@ class CachedEmbeddings:
                 except Exception:
                     if attempt == attempts - 1:
                         raise
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
 
             for vector in result:
                 if len(vector) != self.dimensions:
@@ -102,7 +106,7 @@ class CachedEmbeddings:
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
         return f"emb:v1:{self.model}:{self.dimensions}:{task_type}:{digest}"
 
-    def _cache_get(self, keys: List[str]) -> List[Optional[List[float]]]:
+    def _cache_get(self, keys: list[str]) -> list[list[float] | None]:
         if self.cache is None:
             return [None] * len(keys)
         try:
@@ -116,7 +120,7 @@ class CachedEmbeddings:
             return [None] * len(keys)
         return [self._decode(value) for value in raw]
 
-    def _cache_set(self, vectors: Dict[str, List[float]]):
+    def _cache_set(self, vectors: dict[str, list[float]]):
         if self.cache is None or not vectors:
             return
         try:
@@ -127,7 +131,7 @@ class CachedEmbeddings:
         except redis.RedisError as e:
             logger.warning("Embedding cache write failed: %s", e)
 
-    def _decode(self, value: Optional[bytes]) -> Optional[List[float]]:
+    def _decode(self, value: bytes | None) -> list[float] | None:
         # Stored as packed float32 (~3 KB for 768 dims) rather than JSON (~15 KB).
         if value is None:
             return None

@@ -1,20 +1,20 @@
 # backend/app/core/parser.py
 import ast
-from typing import List, Optional, Tuple
+
 from app.core.schemas import ExtractedChunk
 
 _DEFINITION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 class RepositoryASTVisitor(ast.NodeVisitor):
-    def __init__(self, file_path: str, source_lines: List[str]):
+    def __init__(self, file_path: str, source_lines: list[str]):
         self.file_path = file_path
         self.source_lines = source_lines
-        self.chunks: List[ExtractedChunk] = []
+        self.chunks: list[ExtractedChunk] = []
         # Enclosing definitions as (name, kind) pairs, kind being "class" or "function".
-        self._scope: List[Tuple[str, str]] = []
+        self._scope: list[tuple[str, str]] = []
 
-    def _resolve_ast_name(self, node: ast.AST) -> Optional[str]:
+    def _resolve_ast_name(self, node: ast.AST) -> str | None:
         if isinstance(node, ast.Name):
             return node.id
         elif isinstance(node, ast.Attribute):
@@ -49,18 +49,20 @@ class RepositoryASTVisitor(ast.NodeVisitor):
         bases = [b for b in (self._resolve_ast_name(base) for base in node.bases) if b]
         decorators = [d for d in (self._resolve_ast_name(dec) for dec in node.decorator_list) if d]
 
-        self.chunks.append(ExtractedChunk(
-            name=node.name,
-            qualified_name=self._qualify(node.name),
-            type="class",
-            file_path=self.file_path,
-            start_line=start_line,
-            end_line=end_line,
-            docstring=ast.get_docstring(node),
-            source_code=self._slice(start_line, header_end).rstrip(),
-            calls=sorted(set(decorators)),
-            bases=bases,
-        ))
+        self.chunks.append(
+            ExtractedChunk(
+                name=node.name,
+                qualified_name=self._qualify(node.name),
+                type="class",
+                file_path=self.file_path,
+                start_line=start_line,
+                end_line=end_line,
+                docstring=ast.get_docstring(node),
+                source_code=self._slice(start_line, header_end).rstrip(),
+                calls=sorted(set(decorators)),
+                bases=bases,
+            )
+        )
 
         self._scope.append((node.name, "class"))
         self.generic_visit(node)
@@ -127,7 +129,7 @@ class RepositoryASTVisitor(ast.NodeVisitor):
 
 class CodeParser:
     @staticmethod
-    def parse_python_source(file_path: str, source_text: str) -> List[ExtractedChunk]:
+    def parse_python_source(file_path: str, source_text: str) -> list[ExtractedChunk]:
         if not source_text.strip():
             return []
 

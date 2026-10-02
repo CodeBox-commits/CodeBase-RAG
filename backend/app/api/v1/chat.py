@@ -1,12 +1,14 @@
 import json
 import logging
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, HttpUrl, Field
+from pydantic import BaseModel, Field, HttpUrl
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
-from app.services.agent import CodeAgent, get_agent
+
 from app.core.urls import normalize_repo_url
+from app.services.agent import CodeAgent, get_agent
 
 logger = logging.getLogger(__name__)
 
@@ -15,19 +17,10 @@ router = APIRouter()
 
 class ChatQueryRequest(BaseModel):
     question: str = Field(
-        ..., 
-        min_length=3, 
-        max_length=2048, 
-        description="The user's technical query about the codebase."
+        ..., min_length=3, max_length=2048, description="The user's technical query about the codebase."
     )
-    repo_url: HttpUrl = Field(
-        ..., 
-        description="The target repository HTTP(S) clone URL."
-    )
-    stream: bool = Field(
-        default=True, 
-        description="Whether to stream tokens in SSE format."
-    )
+    repo_url: HttpUrl = Field(..., description="The target repository HTTP(S) clone URL.")
+    stream: bool = Field(default=True, description="Whether to stream tokens in SSE format.")
 
 
 class ChatQueryResponse(BaseModel):
@@ -55,15 +48,12 @@ async def stream_agent_response(agent: CodeAgent, question: str, repo_url: str) 
     responses={
         200: {
             "content": {"text/event-stream": {}},
-            "description": "Streams response tokens as Server-Sent Events when `stream=true`."
+            "description": "Streams response tokens as Server-Sent Events when `stream=true`.",
         }
     },
-    status_code=status.HTTP_200_OK
+    status_code=status.HTTP_200_OK,
 )
-async def ask_codebase(
-    payload: ChatQueryRequest,
-    agent: CodeAgent = Depends(get_agent)
-):
+async def ask_codebase(payload: ChatQueryRequest, agent: CodeAgent = Depends(get_agent)):
 
     str_repo_url = normalize_repo_url(str(payload.repo_url))
 
@@ -71,23 +61,15 @@ async def ask_codebase(
         return StreamingResponse(
             stream_agent_response(agent, payload.question, str_repo_url),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"  
-            }
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
         )
 
     try:
         answer = await run_in_threadpool(agent.run, payload.question, str_repo_url)
-        return ChatQueryResponse(
-            question=payload.question,
-            repo_url=str_repo_url,
-            answer=answer
-        )
+        return ChatQueryResponse(question=payload.question, repo_url=str_repo_url, answer=answer)
     except Exception as e:
         logger.error(f"Failed execution for query on {str_repo_url}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An internal error occurred while executing the code intelligence pipeline."
+            detail="An internal error occurred while executing the code intelligence pipeline.",
         )
