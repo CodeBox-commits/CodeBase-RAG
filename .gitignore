@@ -27,3 +27,9 @@ backend/scarthpad.py
 
 # Frontend build output (built into the Docker image, never committed)
 backend/app/static/
+
+# Test / coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
