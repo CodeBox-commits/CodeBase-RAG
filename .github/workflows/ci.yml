@@ -150,6 +150,11 @@ jobs:
   security:
     name: Security · secrets & dependencies
     runs-on: ubuntu-latest
+    # gitleaks-action lists the PR's commits via the API, which needs pull-requests: read.
+    # Granted only to this job; every other job keeps the read-only default.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
