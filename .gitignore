@@ -33,3 +33,6 @@ backend/app/static/
 .coverage.*
 coverage.xml
 htmlcov/
+
+# Local backups (deploy/backup.sh)
+backups/
