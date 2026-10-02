@@ -19,7 +19,7 @@ class QdrantService:
         self.vector_size = int(os.getenv("VECTOR_SIZE", 768))
         self.client = None
 
-    def connect(self, vector_size: int = None):
+    def connect(self, vector_size: int | None = None):
         if self.client:
             if vector_size and vector_size != self.vector_size:
                 raise ValueError(

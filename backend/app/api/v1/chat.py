@@ -72,4 +72,4 @@ async def ask_codebase(payload: ChatQueryRequest, agent: CodeAgent = Depends(get
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while executing the code intelligence pipeline.",
-        )
+        ) from e

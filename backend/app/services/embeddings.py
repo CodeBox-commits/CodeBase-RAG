@@ -61,15 +61,17 @@ class CachedEmbeddings:
 
         # Identical texts in one call (e.g. repeated one-line methods) are embedded once.
         pending: dict[str, str] = {}
-        for key, text, vector in zip(keys, texts, vectors):
+        for key, text, vector in zip(keys, texts, vectors, strict=True):
             if vector is None:
                 pending.setdefault(key, text)
 
         if pending:
             pending_keys = list(pending)
-            fresh = dict(zip(pending_keys, self._call_api([pending[k] for k in pending_keys], task_type, attempts)))
+            fresh = dict(
+                zip(pending_keys, self._call_api([pending[k] for k in pending_keys], task_type, attempts), strict=True)
+            )
             self._cache_set(fresh)
-            vectors = [vector if vector is not None else fresh[key] for key, vector in zip(keys, vectors)]
+            vectors = [vector if vector is not None else fresh[key] for key, vector in zip(keys, vectors, strict=True)]
 
         logger.info(
             "Embedded %d %s texts: %d from cache, %d sent to the API",

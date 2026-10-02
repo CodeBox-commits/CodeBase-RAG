@@ -55,7 +55,7 @@ def embed_chunks(
             logger.warning(f"Embedding failed for {len(batch)} chunks across {len(paths)} files: {e}")
             failed.update(paths)
             continue
-        for (path, _), vector in zip(batch, vectors):
+        for (path, _), vector in zip(batch, vectors, strict=True):
             vectors_by_file[path].append(vector)
         if on_progress:
             on_progress(min(i + batch_size, len(flat)), len(flat))
@@ -106,8 +106,7 @@ def process_repository(self, repo_url: str):
             subprocess.run(
                 ["git", "clone", "--depth", "1", repo_url, str(repo_path)],
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 timeout=300,
             )
@@ -201,7 +200,7 @@ def process_repository(self, repo_url: str):
                         "end_line": chunk.end_line,
                         "vector": vector,
                     }
-                    for chunk, vector in zip(chunks, vectors_by_file[relative_path])
+                    for chunk, vector in zip(chunks, vectors_by_file[relative_path], strict=True)
                 ]
 
                 graph_db.merge_symbols(repo_url, chunks)

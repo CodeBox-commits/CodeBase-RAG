@@ -13,6 +13,10 @@ ignore = [
     "E501",   # line length is handled by the formatter
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency injection is designed around calls in argument defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]
 

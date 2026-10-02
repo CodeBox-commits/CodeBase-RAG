@@ -435,7 +435,7 @@ class CodeAgent:
 
         lines = []
         for g in graph_results:
-            labels = [l for l in (g.get("node_labels") or []) if l != "Symbol"]
+            labels = [lbl for lbl in (g.get("node_labels") or []) if lbl != "Symbol"]
             label = "Method" if "Method" in labels else (labels[0] if labels else "Node")
             line = (
                 f"{label} '{g.get('name')}' defined in {g.get('filepath')} "

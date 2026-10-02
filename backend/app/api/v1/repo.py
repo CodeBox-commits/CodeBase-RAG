@@ -60,4 +60,4 @@ async def get_repository_graph(
         graph_db.connect()
         return graph_db.get_repository_graph(normalize_repo_url(repo_url), limit=limit)
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Graph database unavailable: {e}")
+        raise HTTPException(status_code=503, detail=f"Graph database unavailable: {e}") from e

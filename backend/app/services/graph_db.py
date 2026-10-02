@@ -182,7 +182,7 @@ class Neo4jService:
         with self.driver.session() as session:
             for i in range(0, len(rows), _EDGE_BATCH_SIZE):
                 batch = rows[i : i + _EDGE_BATCH_SIZE]
-                session.execute_write(lambda tx: tx.run(query, repo_url=repo_url, edges=batch).consume())
+                session.execute_write(lambda tx, batch=batch: tx.run(query, repo_url=repo_url, edges=batch).consume())
 
     def get_symbol_context(
         self,
