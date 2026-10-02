@@ -1,5 +1,7 @@
 x-backend: &backend
-  build: ./backend
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
   env_file: ./backend/.env
   environment:
     # Container hostnames; these override the localhost values in backend/.env.

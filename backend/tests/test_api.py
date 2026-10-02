@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +16,10 @@ class FakeAgent:
     def run(self, question, repo_url):
         self.calls.append((question, repo_url))
         return f"answer for {repo_url}"
+
+    def run_stream(self, question, repo_url):
+        yield {"type": "step", "node": "query_planner", "data": {"query_type": "general"}}
+        yield {"type": "token", "content": self.run(question, repo_url)}
 
 
 @pytest.fixture
@@ -50,7 +55,8 @@ def test_chat_streams_sse_events(client, fake_agent):
     })
 
     events = [e for e in res.text.split("\n\n") if e]
-    assert json.loads(events[0].removeprefix("data: ")) == {
+    assert json.loads(events[0].removeprefix("data: "))["node"] == "query_planner"
+    assert json.loads(events[1].removeprefix("data: ")) == {
         "type": "token", "content": "answer for https://github.com/a/b",
     }
     assert events[-1] == "data: [DONE]"
@@ -78,6 +84,10 @@ def test_index_submits_normalised_url(client, monkeypatch):
     assert submitted == ["https://github.com/a/b"]
 
 
+@pytest.mark.skipif(
+    not (Path(__file__).parents[1] / "app" / "static" / "index.html").exists(),
+    reason="frontend not built (run `npm run build` in frontend/)",
+)
 def test_ui_is_served_at_root_without_shadowing_api(client):
     res = client.get("/")
     assert res.status_code == 200

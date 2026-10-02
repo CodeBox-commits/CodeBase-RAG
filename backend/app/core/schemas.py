@@ -1,5 +1,5 @@
-from typing import List, Optional, Literal,Annotated
-from pydantic import BaseModel, Field, HttpUrl, ConfigDict,StringConstraints
+from typing import List, Optional, Literal
+from pydantic import BaseModel, Field, HttpUrl, ConfigDict
 
 class ExtractedChunk(BaseModel):
 
@@ -51,7 +51,9 @@ QueryComplexity = Literal[
 ]
 
 
-class QueryAnalysis(BaseModel):
+class QueryPlan(BaseModel):
+    """Query analysis and retrieval rewrites, produced by a single LLM call."""
+
     query_type: QueryType = Field(
         ...,
         description="The primary intent of the user's repository question."
@@ -67,16 +69,11 @@ class QueryAnalysis(BaseModel):
         description="Explicit code symbols mentioned in the question, such as functions, classes, methods, or variables."
     )
 
-SearchQuery = Annotated[
-    str,
-    StringConstraints(min_length=2, max_length=256)
-]
-class QueryRewrite(BaseModel):
-    queries: List[SearchQuery] = Field(
+    # No length constraints: a slightly off-spec list must not invalidate the whole plan.
+    # The agent de-duplicates and caps the queries it actually searches with.
+    queries: List[str] = Field(
         default_factory=list,
-        min_length=1,
-        max_length=3,
-        description="Retrieval-oriented search queries."
+        description="One or two short retrieval-oriented search queries."
     )
 
 RetrievalStrategy = Literal[

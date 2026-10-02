@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, HttpUrl, Field
-from starlette.concurrency import run_in_threadpool
+from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 from app.services.agent import CodeAgent, get_agent
 from app.core.urls import normalize_repo_url
 
@@ -38,10 +38,11 @@ class ChatQueryResponse(BaseModel):
 
 async def stream_agent_response(agent: CodeAgent, question: str, repo_url: str) -> AsyncGenerator[str, None]:
     try:
-        answer = await run_in_threadpool(agent.run, question, repo_url)
-        yield f"data: {json.dumps({'type': 'token', 'content': answer})}\n\n"
+        # Each pipeline step is sent as it finishes, so the UI can animate real progress.
+        async for event in iterate_in_threadpool(agent.run_stream(question, repo_url)):
+            yield f"data: {json.dumps(event, default=str)}\n\n"
         yield "data: [DONE]\n\n"
-        
+
     except Exception as e:
         logger.error(f"Error streaming agent execution: {e}", exc_info=True)
         error_payload = json.dumps({"type": "error", "message": "An error occurred during agent execution."})
