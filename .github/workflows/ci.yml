@@ -147,6 +147,21 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ---------------------------------------------------------------------------
+  deploy-config:
+    name: Deploy · scripts, compose & workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck deploy/*.sh
+      - name: production compose file is valid
+        run: docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.example config --quiet
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+  # ---------------------------------------------------------------------------
   security:
     name: Security · secrets & dependencies
     runs-on: ubuntu-latest
