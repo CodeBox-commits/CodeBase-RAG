@@ -26,6 +26,10 @@ class QdrantService:
         assert self.client is not None
         return self.client
 
+    def ping(self) -> None:
+        """Raises if Qdrant isn't reachable (used by the readiness probe)."""
+        self._require_client().get_collections()
+
     def connect(self, vector_size: int | None = None):
         if self.client:
             if vector_size and vector_size != self.vector_size:

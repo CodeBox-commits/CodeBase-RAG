@@ -71,6 +71,10 @@ class LexicalDB:
         assert self.client is not None
         return self.client
 
+    def ping(self) -> None:
+        """Raises if Redis isn't reachable (used by the readiness probe)."""
+        self._require_client().ping()
+
     def connect(self):
         if self.client is not None:
             return
