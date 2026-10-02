@@ -109,6 +109,10 @@ class Neo4jService:
             for statement in _SCHEMA_STATEMENTS:
                 session.run(statement).consume()
 
+    def ping(self) -> None:
+        """Raises if Neo4j isn't reachable (used by the readiness probe)."""
+        self._require_driver().verify_connectivity()
+
     def close(self):
         if self.driver:
             self.driver.close()

@@ -159,3 +159,13 @@ def test_reindex_replaces_instead_of_duplicating(indexed_repo):
     second = tasks.process_repository.apply(args=[repo_url]).get(disable_sync_subtasks=False)
     assert second["symbols"] == first["symbols"]
     assert graph_db.get_repository_graph(repo_url, limit=50)["total_symbols"] == first["symbols"]
+
+
+def test_readiness_probe_sees_all_real_dependencies():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    res = TestClient(app).get("/ready")
+    assert res.status_code == 200, res.json()
+    assert set(res.json()["checks"]) == {"neo4j", "qdrant", "redis"}

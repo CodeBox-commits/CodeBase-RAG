@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.api.health import router as health_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.repo import router as repo_router
 from app.services.graph_db import graph_db
@@ -96,6 +97,7 @@ app.add_middleware(
     max_age=600,
 )
 
+app.include_router(health_router)
 app.include_router(repo_router, prefix="/api/v1/repo", tags=["Repository Ingestion"])
 app.include_router(chat_router, prefix="/api/v1/chat", tags=["Agent Query Engine"])
 
@@ -112,14 +114,6 @@ async def global_exception_handler(request: Request, exc: Exception):
             "trace_id": trace_id,
         },
     )
-
-
-@app.get("/health", tags=["Health Diagnostics"])
-async def health_check():
-    return {
-        "status": "healthy",
-        "services": {"neo4j": graph_db.driver is not None, "qdrant": vector_db.client is not None},
-    }
 
 
 # Mounted last so API routes, /health and /docs take precedence over the UI.
