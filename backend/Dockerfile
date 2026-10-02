@@ -4,7 +4,7 @@
 # --- Stage 1: frontend ----------------------------------------------------------
 # Runs on the build machine's native platform even for multi-arch builds: the output
 # is static files, identical everywhere, so there's no reason to build it under emulation.
-FROM --platform=$BUILDPLATFORM node:24-slim AS frontend
+FROM --platform=$BUILDPLATFORM node:26-slim AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
