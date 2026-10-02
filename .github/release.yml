@@ -1,0 +1,7 @@
+# Groups auto-generated release notes (gh release create --generate-notes).
+changelog:
+  exclude:
+    authors: [dependabot]
+  categories:
+    - title: Changes
+      labels: ["*"]
