@@ -1,8 +1,8 @@
-import os
-import time
 import logging
+import os
 import threading
-from typing import Any, Dict, List, Optional, Tuple
+import time
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class CrossEncoderReranker:
     def __init__(
         self,
         model_name: str = DEFAULT_MODEL,
-        cache_dir: Optional[str] = None,
+        cache_dir: str | None = None,
         weight: float = 0.75,
         max_length: int = 512,
         snippet_max_lines: int = 40,
@@ -36,7 +36,7 @@ class CrossEncoderReranker:
         self.max_length = max_length
         self.snippet_max_lines = snippet_max_lines
         self._ranker = ranker
-        self._load_error: Optional[str] = None
+        self._load_error: str | None = None
         self._lock = threading.Lock()
 
     @classmethod
@@ -57,6 +57,7 @@ class CrossEncoderReranker:
             if self._ranker is None and not self._load_error:
                 try:
                     from flashrank import Ranker
+
                     self._ranker = Ranker(
                         model_name=self.model_name,
                         cache_dir=self.cache_dir,
@@ -69,17 +70,17 @@ class CrossEncoderReranker:
                     logger.error("Reranker failed to load, keeping retrieval order: %s", e)
         return self._ranker
 
-    def passage(self, hit: Dict[str, Any]) -> str:
+    def passage(self, hit: dict[str, Any]) -> str:
         # Symbol and path first: they carry a lot of meaning and survive truncation.
         lines = (hit.get("code_text") or "").splitlines()[: self.snippet_max_lines]
         header = f"{hit.get('symbol')} ({hit.get('chunk_type') or 'code'}) in {hit.get('filepath')}"
         return header + "\n" + "\n".join(lines)
 
     def rerank(
-        self, question: str, hits: List[Dict[str, Any]], top_k: int
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        self, question: str, hits: list[dict[str, Any]], top_k: int
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """Returns the top_k hits in reranked order, plus info about what happened."""
-        info: Dict[str, Any] = {"model": self.model_name, "candidates": len(hits), "applied": False}
+        info: dict[str, Any] = {"model": self.model_name, "candidates": len(hits), "applied": False}
         for rank, hit in enumerate(hits, 1):
             hit["retrieval_rank"] = rank
             hit["retrieval_score"] = hit.get("score", 0.0)
@@ -94,6 +95,7 @@ class CrossEncoderReranker:
         started = time.perf_counter()
         try:
             from flashrank import RerankRequest
+
             passages = [{"id": i, "text": self.passage(h)} for i, h in enumerate(hits)]
             scored = ranker.rerank(RerankRequest(query=question, passages=passages))
         except Exception as e:

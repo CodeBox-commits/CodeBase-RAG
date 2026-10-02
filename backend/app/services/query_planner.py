@@ -1,5 +1,7 @@
 import logging
+
 from langchain_google_genai import ChatGoogleGenerativeAI
+
 from app.core.schemas import QueryPlan
 
 logger = logging.getLogger(__name__)
@@ -71,4 +73,8 @@ class QueryPlanner:
 
     def plan(self, question: str) -> QueryPlan:
         # Errors propagate so the agent node can record them and fall back.
-        return self.structured_llm.invoke(_PROMPT.format(question=question))
+        result = self.structured_llm.invoke(_PROMPT.format(question=question))
+        # with_structured_output(QueryPlan) returns a QueryPlan; dicts only appear with include_raw.
+        if not isinstance(result, QueryPlan):
+            result = QueryPlan.model_validate(result)
+        return result

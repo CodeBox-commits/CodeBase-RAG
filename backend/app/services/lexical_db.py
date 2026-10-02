@@ -1,10 +1,12 @@
-import os
-import re
 import hashlib
 import logging
-from typing import Iterable, List, Dict, Any, Optional, Sequence
+import os
+import re
+from collections.abc import Iterable, Sequence
+from typing import Any
+
 import redis
-from redis.commands.search.field import TextField, TagField, NumericField
+from redis.commands.search.field import NumericField, TagField, TextField
 from redis.commands.search.index_definition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
 
@@ -17,9 +19,41 @@ MAX_QUERY_TERMS = 16
 _TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 _STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "can", "code", "does", "do", "for",
-    "from", "how", "in", "is", "it", "its", "of", "on", "or", "that", "the", "this", "to",
-    "what", "when", "where", "which", "who", "why", "with", "work", "works",
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "can",
+    "code",
+    "does",
+    "do",
+    "for",
+    "from",
+    "how",
+    "in",
+    "is",
+    "it",
+    "its",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+    "with",
+    "work",
+    "works",
 }
 
 
@@ -28,7 +62,14 @@ class LexicalDB:
         self.url = os.getenv("REDIS_URL", "redis://redis:6379/0")
         self.index_name = os.getenv("REDIS_SEARCH_INDEX", "code_chunks")
         self.key_prefix = "code_chunk:"
-        self.client: Optional[redis.Redis] = None
+        self.client: redis.Redis | None = None
+
+    def _require_client(self) -> redis.Redis:
+        """The client, connecting first if needed (callers never see None)."""
+        if self.client is None:
+            self.connect()
+        assert self.client is not None
+        return self.client
 
     def connect(self):
         if self.client is not None:
@@ -52,7 +93,7 @@ class LexicalDB:
     def _ensure_index(self):
         """Create the RediSearch index if it does not already exist."""
         try:
-            self.client.ft(self.index_name).info()
+            self._require_client().ft(self.index_name).info()
             return
         except redis.ResponseError:
             pass
@@ -72,8 +113,8 @@ class LexicalDB:
             index_type=IndexType.HASH,
         )
 
-        self.client.ft(self.index_name).create_index(
-            schema,
+        self._require_client().ft(self.index_name).create_index(
+            list(schema),
             definition=definition,
         )
 
@@ -83,7 +124,7 @@ class LexicalDB:
         self,
         repo_url: str,
         filepath: str,
-        items: List[Dict[str, Any]],
+        items: list[dict[str, Any]],
     ):
         if not items:
             return
@@ -91,7 +132,7 @@ class LexicalDB:
         if self.client is None:
             self.connect()
 
-        pipe = self.client.pipeline(transaction=False)
+        pipe = self._require_client().pipeline(transaction=False)
 
         for item in items:
             key = self._make_key(
@@ -125,16 +166,14 @@ class LexicalDB:
 
         # Always read the first page: deleted docs drop out of the index.
         while True:
-            query = Query(
-                f"@repo_url:{{{self._escape_tag(repo_url)}}}"
-            ).no_content().paging(0, page_size)
+            query = Query(f"@repo_url:{{{self._escape_tag(repo_url)}}}").no_content().paging(0, page_size)
 
-            results = self.client.ft(self.index_name).search(query)
+            results = self._require_client().ft(self.index_name).search(query)
 
             if not results.docs:
                 break
 
-            pipe = self.client.pipeline(transaction=False)
+            pipe = self._require_client().pipeline(transaction=False)
 
             for doc in results.docs:
                 pipe.delete(doc.id)
@@ -150,11 +189,11 @@ class LexicalDB:
 
     def search(
         self,
-        terms: List[str],
+        terms: list[str],
         repo_url: str,
         limit: int = 20,
         fields: Sequence[str] = DEFAULT_FIELDS,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """BM25 search for any of `terms` (see `extract_terms`) within one repository."""
         if self.client is None:
             self.connect()
@@ -163,18 +202,24 @@ class LexicalDB:
         if query_string is None:
             return []
 
-        query = Query(query_string).scorer("BM25STD").with_scores().paging(0, limit).return_fields(
-            "repo_url",
-            "filepath",
-            "symbol",
-            "language",
-            "chunk_type",
-            "start_line",
-            "end_line",
-            "code_text",
+        query = (
+            Query(query_string)
+            .scorer("BM25STD")
+            .with_scores()
+            .paging(0, limit)
+            .return_fields(
+                "repo_url",
+                "filepath",
+                "symbol",
+                "language",
+                "chunk_type",
+                "start_line",
+                "end_line",
+                "code_text",
+            )
         )
 
-        results = self.client.ft(self.index_name).search(query)
+        results = self._require_client().ft(self.index_name).search(query)
         hits = [
             {
                 "repo_url": doc.repo_url,
@@ -192,22 +237,22 @@ class LexicalDB:
         return self.rank_exact_symbols_first(hits, terms)
 
     @staticmethod
-    def rank_exact_symbols_first(hits: List[Dict[str, Any]], terms: List[str]) -> List[Dict[str, Any]]:
+    def rank_exact_symbols_first(hits: list[dict[str, Any]], terms: list[str]) -> list[dict[str, Any]]:
         # BM25 length normalisation favours short chunks, so a class with a long docstring
         # loses to its own methods on a query for the class name. The definition whose own
         # name is the searched term should always lead.
         wanted = {t.lower() for t in terms}
 
-        def is_exact(hit: Dict[str, Any]) -> bool:
+        def is_exact(hit: dict[str, Any]) -> bool:
             symbol = (hit.get("symbol") or "").lower()
             return symbol in wanted or symbol.rsplit(".", 1)[-1] in wanted
 
         return sorted(hits, key=lambda hit: not is_exact(hit))
 
     @staticmethod
-    def extract_terms(texts: Iterable[str], max_terms: int = MAX_QUERY_TERMS) -> List[str]:
+    def extract_terms(texts: Iterable[str], max_terms: int = MAX_QUERY_TERMS) -> list[str]:
         """Identifier-like, lower-cased, de-duplicated search terms from free text."""
-        terms: List[str] = []
+        terms: list[str] = []
         for text in texts:
             for token in _TOKEN_RE.findall(text or ""):
                 term = token.lower()
@@ -219,19 +264,16 @@ class LexicalDB:
     @classmethod
     def build_query(
         cls,
-        terms: List[str],
+        terms: list[str],
         repo_url: str,
         fields: Sequence[str] = DEFAULT_FIELDS,
-    ) -> Optional[str]:
+    ) -> str | None:
         # Terms are OR-ed across all fields so one matching word is enough to be a candidate;
         # BM25 plus the field weights handle ranking.
         safe_terms = [t for t in terms if _TOKEN_RE.fullmatch(t)]
         if not safe_terms or not fields:
             return None
-        return (
-            f"@repo_url:{{{cls._escape_tag(repo_url)}}} "
-            f"@{'|'.join(fields)}:({'|'.join(safe_terms)})"
-        )
+        return f"@repo_url:{{{cls._escape_tag(repo_url)}}} @{'|'.join(fields)}:({'|'.join(safe_terms)})"
 
     def _make_key(
         self,
@@ -247,10 +289,7 @@ class LexicalDB:
     @staticmethod
     def _escape_tag(value: str) -> str:
         # RediSearch tag queries need every non-alphanumeric char escaped (URLs contain : / - .).
-        return "".join(
-            c if c.isalnum() or c == "_" else f"\\{c}"
-            for c in value
-        )
+        return "".join(c if c.isalnum() or c == "_" else f"\\{c}" for c in value)
 
 
 lexical_db = LexicalDB()

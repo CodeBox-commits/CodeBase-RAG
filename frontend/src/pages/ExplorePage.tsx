@@ -63,8 +63,9 @@ export default function ExplorePage() {
     return () => { cancelled = true }
   }, [active?.url, ready, limit]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const nodes = graph?.nodes ?? []
-  const edges = graph?.edges ?? []
+  // Memoised: a fresh `[]` each render would invalidate every useMemo below.
+  const nodes = useMemo(() => graph?.nodes ?? [], [graph])
+  const edges = useMemo(() => graph?.edges ?? [], [graph])
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
 
   const highlight = useMemo(() => {

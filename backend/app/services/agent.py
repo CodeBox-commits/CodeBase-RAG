@@ -1,27 +1,30 @@
+import logging
 import os
 import time
-import logging
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from typing import TypedDict, List, Dict, Any, Iterator, Optional, Tuple
-from langgraph.graph import StateGraph, END
+from typing import Any, TypedDict
+
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.graph import END, StateGraph
+
 from app.core.schemas import RetrievalStrategy
-from app.services.vector_db import vector_db
+from app.services.embeddings import build_embeddings
+from app.services.graph_db import graph_db
 from app.services.hybrid_search import hybrid_search
 from app.services.lexical_db import DEFAULT_FIELDS, LexicalDB
 from app.services.query_planner import QueryPlanner
-from app.services.embeddings import build_embeddings
-from app.services.graph_db import graph_db
 from app.services.reranker import CrossEncoderReranker
+from app.services.vector_db import vector_db
 
 logger = logging.getLogger(__name__)
 
 
-def hybrid_search_terms(queries: List[str], symbols: List[str]) -> List[str]:
+def hybrid_search_terms(queries: list[str], symbols: list[str]) -> list[str]:
     # Symbols first so they survive the term cap.
     return LexicalDB.extract_terms([*symbols, *queries])
 
- 
+
 @dataclass(frozen=True)
 class AgentConfig:
     llm_model: str
@@ -42,14 +45,12 @@ class AgentConfig:
     # The Google SDK already retries 429/503 with backoff; retrying again here only burns quota.
     llm_retries: int = 0
     llm_retry_backoff_seconds: float = 1.5
- 
+
     @classmethod
     def from_env(cls) -> "AgentConfig":
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise RuntimeError(
-                "GEMINI_API_KEY is not set. The code agent cannot start without it."
-            )
+            raise RuntimeError("GEMINI_API_KEY is not set. The code agent cannot start without it.")
         return cls(
             llm_model=os.getenv("LLM_MODEL", "gemini-3.5-flash-lite"),
             embedding_model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
@@ -64,28 +65,28 @@ class AgentConfig:
             graph_fanout=int(os.getenv("GRAPH_FANOUT", "10")),
             max_output_tokens=int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "2048")),
         )
-    
- 
+
+
 class AgentState(TypedDict):
     question: str
     repo_url: str
-    query_embeddings: List[List[float]]
-    rewritten_queries: List[str]
+    query_embeddings: list[list[float]]
+    rewritten_queries: list[str]
     query_type: str
     complexity: str
-    symbols: List[str]
-    vector_results: List[Dict[str, Any]]
-    graph_results: List[Dict[str, Any]]
-    rerank_info: Dict[str, Any]
+    symbols: list[str]
+    vector_results: list[dict[str, Any]]
+    graph_results: list[dict[str, Any]]
+    rerank_info: dict[str, Any]
     retrieval_strategy: RetrievalStrategy
-    errors: List[str]
+    errors: list[str]
     answer: str
- 
- 
+
+
 class CodeAgent:
-    def __init__(self, config: Optional[AgentConfig] = None):
+    def __init__(self, config: AgentConfig | None = None):
         self.config = config or AgentConfig.from_env()
- 
+
         self.llm = ChatGoogleGenerativeAI(
             model=self.config.llm_model,
             google_api_key=self.config.api_key,
@@ -100,13 +101,16 @@ class CodeAgent:
         )
         self.reranker = CrossEncoderReranker.from_env()
         self.workflow = self._build_workflow()
- 
+
     def _build_workflow(self) -> Any:
-        
+
         graph = StateGraph(AgentState)
- 
+
         graph.add_node("query_planner", self.node_query_planner)
-        graph.add_node("retrieval_router",self.node_retrieval_router,)
+        graph.add_node(
+            "retrieval_router",
+            self.node_retrieval_router,
+        )
         graph.add_node("embed_queries", self.node_embed_queries)
         graph.add_node("retrieve", self.node_retrieve)
         graph.add_node("rerank", self.node_rerank)
@@ -130,19 +134,21 @@ class CodeAgent:
         )
         graph.add_edge("graph_search", "generate_response")
         graph.add_edge("generate_response", END)
- 
+
         return graph.compile()
- 
+
     @staticmethod
-    def route_after_retrieval(state: AgentState,) -> str:
+    def route_after_retrieval(
+        state: AgentState,
+    ) -> str:
         strategy = state["retrieval_strategy"]
 
         if strategy == "vector":
             return "generate_response"
-        
+
         return "graph_search"
-    
-    def node_query_planner(self, state: AgentState) -> Dict[str, Any]:
+
+    def node_query_planner(self, state: AgentState) -> dict[str, Any]:
         errors = list(state.get("errors", []))
 
         try:
@@ -174,41 +180,50 @@ class CodeAgent:
             "errors": errors,
         }
 
-    def node_retrieval_router(self,state: AgentState,) -> Dict[str, Any]:
-       query_type = state["query_type"]
+    def node_retrieval_router(
+        self,
+        state: AgentState,
+    ) -> dict[str, Any]:
+        query_type = state["query_type"]
 
-       if query_type in ("symbol_lookup","implementation",):
-           strategy: RetrievalStrategy = "vector"
+        if query_type in (
+            "symbol_lookup",
+            "implementation",
+        ):
+            strategy: RetrievalStrategy = "vector"
 
-       elif query_type == "call_flow":
-           strategy = "graph"
+        elif query_type == "call_flow":
+            strategy = "graph"
 
-       elif query_type in ("dependency","architecture","bug_analysis",
-       ):
-           strategy = "hybrid"
+        elif query_type in (
+            "dependency",
+            "architecture",
+            "bug_analysis",
+        ):
+            strategy = "hybrid"
 
-       else:
-           strategy = "vector"
+        else:
+            strategy = "vector"
 
-       logger.info(
-           "Retrieval strategy selected: %s",
-           strategy,
-       )
+        logger.info(
+            "Retrieval strategy selected: %s",
+            strategy,
+        )
 
-       return {
-           "retrieval_strategy": strategy,
-       }
-        
-    def _search_queries(self, state: AgentState) -> List[str]:
+        return {
+            "retrieval_strategy": strategy,
+        }
+
+    def _search_queries(self, state: Mapping[str, Any]) -> list[str]:
         """Original question plus the rewriter's retrieval queries, de-duplicated."""
-        queries: List[str] = []
+        queries: list[str] = []
         for q in [state["question"], *state.get("rewritten_queries", [])]:
             q = (q or "").strip()
             if q and q.lower() not in {existing.lower() for existing in queries}:
                 queries.append(q)
         return queries[: self.config.max_query_embeddings]
 
-    def _lexical_plan(self, state: AgentState) -> Tuple[List[str], Tuple[str, ...]]:
+    def _lexical_plan(self, state: Mapping[str, Any]) -> tuple[list[str], tuple[str, ...]]:
         symbols = state.get("symbols", [])
         if state["retrieval_strategy"] == "hybrid":
             # Full BM25 over symbol, path and code text using every retrieval query.
@@ -217,9 +232,9 @@ class CodeAgent:
         # symbol always gets a symbol-field lexical lookup.
         return hybrid_search_terms([], symbols), ("symbol",)
 
-    def node_embed_queries(self, state: AgentState) -> Dict[str, Any]:
+    def node_embed_queries(self, state: AgentState) -> dict[str, Any]:
         errors = list(state.get("errors", []))
-        embeddings: List[List[float]] = []
+        embeddings: list[list[float]] = []
         try:
             # One batched request for every query; cached queries never reach the API.
             embeddings = self.embeddings.embed_queries(self._search_queries(state))
@@ -227,11 +242,11 @@ class CodeAgent:
             logger.error(f"Query embedding failed: {e}")
             errors.append(f"embedding_failed: {e}")
         return {"query_embeddings": embeddings, "errors": errors}
- 
-    def node_retrieve(self, state: AgentState) -> Dict[str, Any]:
+
+    def node_retrieve(self, state: AgentState) -> dict[str, Any]:
         errors = list(state.get("errors", []))
         embeddings = state.get("query_embeddings") or []
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
 
         lexical_terms, lexical_fields = self._lexical_plan(state)
 
@@ -256,12 +271,12 @@ class CodeAgent:
             "vector_results": results,
             "errors": errors,
         }
- 
+
     def _candidate_limit(self) -> int:
         reranker = getattr(self, "reranker", None)
         return max(self.config.rerank_candidates, self.config.vector_top_k) if reranker else self.config.vector_top_k
 
-    def node_rerank(self, state: AgentState) -> Dict[str, Any]:
+    def node_rerank(self, state: AgentState) -> dict[str, Any]:
         errors = list(state.get("errors", []))
         candidates = state.get("vector_results", [])
         reranker = getattr(self, "reranker", None)
@@ -276,7 +291,7 @@ class CodeAgent:
         logger.info("Reranked %d candidates -> %d (applied=%s)", len(candidates), len(results), info.get("applied"))
         return {"vector_results": results, "rerank_info": info, "errors": errors}
 
-    def node_graph_search(self, state: AgentState) -> Dict[str, Any]:
+    def node_graph_search(self, state: AgentState) -> dict[str, Any]:
         errors = list(state.get("errors", []))
         anchors = [
             {"filepath": item["filepath"], "symbol": item["symbol"]}
@@ -288,7 +303,7 @@ class CodeAgent:
         if not anchors and not names:
             return {"graph_results": [], "errors": errors}
 
-        graph_context: List[Dict[str, Any]] = []
+        graph_context: list[dict[str, Any]] = []
         try:
             graph_db.connect()
             graph_context = graph_db.get_symbol_context(
@@ -302,18 +317,18 @@ class CodeAgent:
         except Exception as e:
             logger.error(f"Graph search node failed: {e}", exc_info=True)
             errors.append(f"graph_search_failed: {e}")
- 
+
         return {"graph_results": graph_context, "errors": errors}
- 
-    def node_generate_response(self, state: AgentState) -> Dict[str, Any]:
+
+    def node_generate_response(self, state: AgentState) -> dict[str, Any]:
         question = state["question"]
         vector_results = state.get("vector_results", [])
         graph_results = state.get("graph_results", [])
         errors = state.get("errors", [])
- 
+
         code_snippets = self._format_code_snippets(vector_results, self.config.snippet_max_lines)
         graph_metadata = self._format_graph_context(graph_results)
- 
+
         system_prompt = (
             "You are a senior software engineer acting as a code assistant for a specific "
             "repository. You answer using ONLY the context provided below (vector-retrieved "
@@ -331,7 +346,7 @@ class CodeAgent:
             "4. Prefer concise, technically precise answers over padded explanations. Use "
             "bullet points or short code blocks where they aid clarity."
         )
- 
+
         context_note = ""
         if errors:
             context_note = (
@@ -339,7 +354,7 @@ class CodeAgent:
                 "Some retrieval steps had issues, so context below may be incomplete:\n"
                 + "\n".join(f"- {e}" for e in errors)
             )
- 
+
         user_content = (
             f"User Question: {question}\n\n"
             f"--- Code Snippets (Vector Search) ---\n{code_snippets or 'No direct matches found.'}\n\n"
@@ -347,31 +362,28 @@ class CodeAgent:
             f"{context_note}\n\n"
             "Answer the question using the rules above."
         )
- 
+
         answer = self._invoke_llm_with_retry(system_prompt, user_content)
         return {"answer": answer}
- 
+
     @staticmethod
-    def _format_code_snippets(vector_results: List[Dict[str, Any]], max_lines: int = 60) -> str:
-       blocks = []
+    def _format_code_snippets(vector_results: list[dict[str, Any]], max_lines: int = 60) -> str:
+        blocks = []
 
-       for v in CodeAgent._drop_nested_hits(vector_results, max_lines):
-          code = CodeAgent._truncate_code(v.get("code_text", ""), max_lines)
-          loc = (
-             f"{v.get('filepath', 'unknown')} "
-             f"(Lines {v.get('start_line')}-{v.get('end_line')})"
-          )
+        for v in CodeAgent._drop_nested_hits(vector_results, max_lines):
+            code = CodeAgent._truncate_code(v.get("code_text", ""), max_lines)
+            loc = f"{v.get('filepath', 'unknown')} (Lines {v.get('start_line')}-{v.get('end_line')})"
 
-          blocks.append(
-            f"File: {loc}\n"
-            f"Symbol: {v.get('symbol', 'unknown')}\n"
-            f"Language: {v.get('language', 'unknown')}\n"
-            f"Chunk Type: {v.get('chunk_type', 'unknown')}\n"
-            f"Relevance Score: {v.get('score', 0):.3f} (via {', '.join(v.get('sources', [])) or 'unknown'})\n"
-            f"Code:\n```\n{code}\n```"
-         )
+            blocks.append(
+                f"File: {loc}\n"
+                f"Symbol: {v.get('symbol', 'unknown')}\n"
+                f"Language: {v.get('language', 'unknown')}\n"
+                f"Chunk Type: {v.get('chunk_type', 'unknown')}\n"
+                f"Relevance Score: {v.get('score', 0):.3f} (via {', '.join(v.get('sources', [])) or 'unknown'})\n"
+                f"Code:\n```\n{code}\n```"
+            )
 
-       return "\n\n".join(blocks)
+        return "\n\n".join(blocks)
 
     @staticmethod
     def _truncate_code(code: str, max_lines: int) -> str:
@@ -382,23 +394,25 @@ class CodeAgent:
         return "\n".join(lines[:max_lines]) + f"\n# ... {len(lines) - max_lines} more lines not shown"
 
     @staticmethod
-    def _drop_nested_hits(results: List[Dict[str, Any]], max_lines: int) -> List[Dict[str, Any]]:
+    def _drop_nested_hits(results: list[dict[str, Any]], max_lines: int) -> list[dict[str, Any]]:
         """Drops hits whose code is already shown in full inside another hit, e.g. a nested function.
 
         Class chunks only carry the class header, never their methods' code, so they can't contain
         another hit; neither can a hit that will be truncated.
         """
-        def span(hit: Dict[str, Any]):
+
+        def span(hit: dict[str, Any]):
             return hit.get("filepath"), hit.get("start_line"), hit.get("end_line")
 
         containers = [
-            span(hit) for hit in results
+            span(hit)
+            for hit in results
             if hit.get("chunk_type") != "class"
             and None not in span(hit)
             and len((hit.get("code_text") or "").splitlines()) <= max_lines
         ]
 
-        def is_nested(hit: Dict[str, Any]) -> bool:
+        def is_nested(hit: dict[str, Any]) -> bool:
             path, start, end = span(hit)
             if start is None or end is None:
                 return False
@@ -408,10 +422,10 @@ class CodeAgent:
             )
 
         return [hit for hit in results if not is_nested(hit)]
- 
+
     @staticmethod
-    def _format_graph_context(graph_results: List[Dict[str, Any]]) -> str:
-        def fmt_neighbours(items: List[Dict[str, Any]]) -> str:
+    def _format_graph_context(graph_results: list[dict[str, Any]]) -> str:
+        def fmt_neighbours(items: list[dict[str, Any]]) -> str:
             parts = []
             for item in items:
                 hops = item.get("hops") or 1
@@ -421,7 +435,7 @@ class CodeAgent:
 
         lines = []
         for g in graph_results:
-            labels = [l for l in (g.get("node_labels") or []) if l != "Symbol"]
+            labels = [lbl for lbl in (g.get("node_labels") or []) if lbl != "Symbol"]
             label = "Method" if "Method" in labels else (labels[0] if labels else "Node")
             line = (
                 f"{label} '{g.get('name')}' defined in {g.get('filepath')} "
@@ -441,16 +455,17 @@ class CodeAgent:
                 line += f" | Called by: {fmt_neighbours(g['called_by'])}"
             lines.append(line)
         return "\n".join(lines)
- 
- 
+
     def _invoke_llm_with_retry(self, system_prompt: str, user_content: str) -> str:
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for attempt in range(self.config.llm_retries + 1):
             try:
-                response = self.llm.invoke([
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content},
-                ])
+                response = self.llm.invoke(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
+                    ]
+                )
                 # Gemini 3 returns content as a list of parts; .text flattens it to a string.
                 return response.text
             except Exception as e:
@@ -458,7 +473,7 @@ class CodeAgent:
                 logger.error(f"Gemini LLM generation failed (attempt {attempt + 1}): {e}")
                 if attempt < self.config.llm_retries:
                     time.sleep(self.config.llm_retry_backoff_seconds * (attempt + 1))
- 
+
         # Full error is logged above; the user gets a short, readable reason.
         reason = str(last_error)
         if "RESOURCE_EXHAUSTED" in reason or "429" in reason:
@@ -469,7 +484,6 @@ class CodeAgent:
             detail = "the language model returned an error"
         return f"I couldn't generate an answer because {detail}. Please try again in a minute."
 
- 
     def _initial_state(self, question: str, repo_url: str) -> AgentState:
         return {
             "question": question,
@@ -491,13 +505,13 @@ class CodeAgent:
         final_state = self.workflow.invoke(self._initial_state(question, repo_url))
         return final_state["answer"]
 
-    def run_stream(self, question: str, repo_url: str) -> Iterator[Dict[str, Any]]:
+    def run_stream(self, question: str, repo_url: str) -> Iterator[dict[str, Any]]:
         """Runs the workflow, yielding a UI event as each node finishes, then the answer.
 
         Events are summaries for visualisation (no embeddings, trimmed code), so the
         client can show what each pipeline step actually did.
         """
-        state: Dict[str, Any] = dict(self._initial_state(question, repo_url))
+        state: dict[str, Any] = dict(self._initial_state(question, repo_url))
         for update in self.workflow.stream(state, stream_mode="updates"):
             for node, delta in update.items():
                 started = time.perf_counter()
@@ -509,8 +523,8 @@ class CodeAgent:
                 event["summary_ms"] = round((time.perf_counter() - started) * 1000, 2)
                 yield event
 
-    def _summarize_step(self, node: str, state: Dict[str, Any]) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def _summarize_step(self, node: str, state: dict[str, Any]) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         if node == "query_planner":
             data = {
                 "query_type": state["query_type"],
@@ -575,12 +589,12 @@ class CodeAgent:
         return {"type": "step", "node": node, "data": data, "errors": list(state.get("errors", []))}
 
     @staticmethod
-    def _graph_payload(graph_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _graph_payload(graph_results: list[dict[str, Any]]) -> dict[str, Any]:
         """Flattens symbol context rows into nodes and typed edges for drawing."""
-        nodes: Dict[str, Dict[str, Any]] = {}
-        edges: List[Dict[str, Any]] = []
+        nodes: dict[str, dict[str, Any]] = {}
+        edges: list[dict[str, Any]] = []
 
-        def add(name: Optional[str], kind: str, filepath: Optional[str] = None, anchor: bool = False) -> Optional[str]:
+        def add(name: str | None, kind: str, filepath: str | None = None, anchor: bool = False) -> str | None:
             if not name:
                 return None
             node = nodes.setdefault(name, {"id": name, "kind": kind, "filepath": filepath, "anchor": False})
@@ -597,10 +611,14 @@ class CodeAgent:
                 continue
             for item in row.get("calls") or []:
                 if add(item.get("name"), "function", item.get("filepath")):
-                    edges.append({"source": center, "target": item["name"], "type": "CALLS", "hops": item.get("hops", 1)})
+                    edges.append(
+                        {"source": center, "target": item["name"], "type": "CALLS", "hops": item.get("hops", 1)}
+                    )
             for item in row.get("called_by") or []:
                 if add(item.get("name"), "function", item.get("filepath")):
-                    edges.append({"source": item["name"], "target": center, "type": "CALLS", "hops": item.get("hops", 1)})
+                    edges.append(
+                        {"source": item["name"], "target": center, "type": "CALLS", "hops": item.get("hops", 1)}
+                    )
             if add(row.get("owner"), "class"):
                 edges.append({"source": row["owner"], "target": center, "type": "HAS_METHOD", "hops": 1})
             for base in row.get("bases") or []:
@@ -615,14 +633,13 @@ class CodeAgent:
 
         unique = {(e["source"], e["target"], e["type"]): e for e in edges}
         return {"nodes": list(nodes.values()), "edges": list(unique.values())}
- 
- 
-_agent_instance: Optional[CodeAgent] = None
- 
- 
+
+
+_agent_instance: CodeAgent | None = None
+
+
 def get_agent() -> CodeAgent:
     global _agent_instance
     if _agent_instance is None:
         _agent_instance = CodeAgent()
     return _agent_instance
- 

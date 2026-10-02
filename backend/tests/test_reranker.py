@@ -23,9 +23,27 @@ class FakeRanker:
 
 def _hits():
     return [
-        {"symbol": "BadSignature", "filepath": "exc.py", "chunk_type": "class", "score": 1.0, "code_text": "class BadSignature: ..."},
-        {"symbol": "Signer.unsign", "filepath": "signer.py", "chunk_type": "method", "score": 0.8, "code_text": "def unsign(self): ..."},
-        {"symbol": "want_bytes", "filepath": "encoding.py", "chunk_type": "function", "score": 0.6, "code_text": "def want_bytes(s): ..."},
+        {
+            "symbol": "BadSignature",
+            "filepath": "exc.py",
+            "chunk_type": "class",
+            "score": 1.0,
+            "code_text": "class BadSignature: ...",
+        },
+        {
+            "symbol": "Signer.unsign",
+            "filepath": "signer.py",
+            "chunk_type": "method",
+            "score": 0.8,
+            "code_text": "def unsign(self): ...",
+        },
+        {
+            "symbol": "want_bytes",
+            "filepath": "encoding.py",
+            "chunk_type": "function",
+            "score": 0.6,
+            "code_text": "def want_bytes(s): ...",
+        },
     ]
 
 
@@ -85,7 +103,9 @@ def test_agent_rerank_node_uses_reranker_and_records_info():
 
     agent = CodeAgent.__new__(CodeAgent)
     agent.config = AgentConfig(llm_model="t", embedding_model="t", api_key="t", vector_top_k=1)
-    agent.reranker = CrossEncoderReranker(ranker=FakeRanker({"BadSignature": 0.0, "Signer.unsign": 0.9, "want_bytes": 0.1}))
+    agent.reranker = CrossEncoderReranker(
+        ranker=FakeRanker({"BadSignature": 0.0, "Signer.unsign": 0.9, "want_bytes": 0.1})
+    )
     out = agent.node_rerank({"question": "q", "vector_results": _hits(), "errors": []})
     assert [r["symbol"] for r in out["vector_results"]] == ["Signer.unsign"]
     assert out["rerank_info"]["applied"] is True

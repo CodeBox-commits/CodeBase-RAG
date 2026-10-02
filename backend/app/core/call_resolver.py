@@ -1,27 +1,27 @@
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from app.core.schemas import ExtractedChunk
 
 # (filepath, qualified_name) uniquely identifies a symbol within a repository.
-SymbolKey = Tuple[str, str]
-Edge = Tuple[SymbolKey, SymbolKey]
+SymbolKey = tuple[str, str]
+Edge = tuple[SymbolKey, SymbolKey]
 
 
 @dataclass
 class Relationships:
-    calls: List[Edge] = field(default_factory=list)
-    inherits: List[Edge] = field(default_factory=list)
-    has_method: List[Edge] = field(default_factory=list)
+    calls: list[Edge] = field(default_factory=list)
+    inherits: list[Edge] = field(default_factory=list)
+    has_method: list[Edge] = field(default_factory=list)
 
 
 def _key(chunk: ExtractedChunk) -> SymbolKey:
     return (chunk.file_path, chunk.qualified_name)
 
 
-def _parent_name(chunk: ExtractedChunk) -> Optional[str]:
+def _parent_name(chunk: ExtractedChunk) -> str | None:
     parts = chunk.qualified_name.split(".")
     return parts[-2] if len(parts) > 1 else None
 
@@ -33,13 +33,13 @@ def _module_name(chunk: ExtractedChunk) -> str:
 
 class _SymbolIndex:
     def __init__(self, chunks: Iterable[ExtractedChunk]):
-        self.by_key: Dict[SymbolKey, ExtractedChunk] = {}
-        self.by_name: Dict[str, List[ExtractedChunk]] = defaultdict(list)
+        self.by_key: dict[SymbolKey, ExtractedChunk] = {}
+        self.by_name: dict[str, list[ExtractedChunk]] = defaultdict(list)
         for chunk in chunks:
             self.by_key[_key(chunk)] = chunk
             self.by_name[chunk.name].append(chunk)
 
-    def enclosing_class(self, chunk: ExtractedChunk) -> Optional[str]:
+    def enclosing_class(self, chunk: ExtractedChunk) -> str | None:
         """Qualified name of the nearest class around `chunk` (what `self` refers to)."""
         parts = chunk.qualified_name.split(".")[:-1]
         while parts:
@@ -49,7 +49,7 @@ class _SymbolIndex:
             parts.pop()
         return None
 
-    def resolve(self, ref: str, source: ExtractedChunk, kinds: Set[str]) -> Optional[SymbolKey]:
+    def resolve(self, ref: str, source: ExtractedChunk, kinds: set[str]) -> SymbolKey | None:
         """Best-effort static resolution of a call/base reference to a definition.
 
         Returns None when the reference is external (stdlib, third party) or ambiguous,
@@ -75,10 +75,7 @@ class _SymbolIndex:
         else:
             # `Class.method(...)` or `module.func(...)`.
             qualifier = parts[-2]
-            exact = [
-                c for c in candidates
-                if _parent_name(c) == qualifier or _module_name(c) == qualifier
-            ]
+            exact = [c for c in candidates if _parent_name(c) == qualifier or _module_name(c) == qualifier]
             if len(exact) == 1:
                 return _key(exact[0])
             pool = exact or candidates
@@ -91,7 +88,7 @@ class _SymbolIndex:
         return None
 
 
-def resolve_relationships(chunks: List[ExtractedChunk]) -> Relationships:
+def resolve_relationships(chunks: list[ExtractedChunk]) -> Relationships:
     index = _SymbolIndex(chunks)
     rel = Relationships()
 

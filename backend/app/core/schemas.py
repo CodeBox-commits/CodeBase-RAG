@@ -1,39 +1,38 @@
-from typing import List, Optional, Literal
-from pydantic import BaseModel, Field, HttpUrl, ConfigDict
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
 
 class ExtractedChunk(BaseModel):
-
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str = Field(..., description="The functional name or identifier of the code block")
     qualified_name: str = Field(
-        ...,
-        description="Dotted scope path unique within the file, e.g. 'MyClass.method' or 'outer.inner'"
+        ..., description="Dotted scope path unique within the file, e.g. 'MyClass.method' or 'outer.inner'"
     )
     type: Literal["function", "method", "class", "module"] = Field(
-        default="function", 
-        description="The structural type of the asset"
+        default="function", description="The structural type of the asset"
     )
     file_path: str = Field(..., description="The relative filesystem path inside the git repository")
     start_line: int = Field(..., ge=1, description="The 1-indexed line number where the signature begins")
     end_line: int = Field(..., ge=1, description="The 1-indexed line number where the block ends")
-    docstring: Optional[str] = Field(None, description="Extracted documentation block, if any")
+    docstring: str | None = Field(None, description="Extracted documentation block, if any")
     source_code: str = Field(..., description="The raw textual code payload of this functional block")
 
-    calls: List[str] = Field(
-        default_factory=list, 
-        description="List of direct internal function calls discovered inside this node's scope"
+    calls: list[str] = Field(
+        default_factory=list, description="List of direct internal function calls discovered inside this node's scope"
     )
-    bases: List[str] = Field(
-        default_factory=list,
-        description="Base class references for class chunks, as written in the source"
+    bases: list[str] = Field(
+        default_factory=list, description="Base class references for class chunks, as written in the source"
     )
+
 
 class RepositoryIndexPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    
+
     github_url: HttpUrl = Field(..., description="The public HTTPS URL used to clone the target repository")
-    branch: str = Field(default="main", description="The specific git branch version tag to clone and index") 
+    branch: str = Field(default="main", description="The specific git branch version tag to clone and index")
+
 
 QueryType = Literal[
     "symbol_lookup",
@@ -54,27 +53,21 @@ QueryComplexity = Literal[
 class QueryPlan(BaseModel):
     """Query analysis and retrieval rewrites, produced by a single LLM call."""
 
-    query_type: QueryType = Field(
-        ...,
-        description="The primary intent of the user's repository question."
-    )
+    query_type: QueryType = Field(..., description="The primary intent of the user's repository question.")
 
     complexity: QueryComplexity = Field(
-        ...,
-        description="Whether the question is simple or requires multi-step/cross-file reasoning."
+        ..., description="Whether the question is simple or requires multi-step/cross-file reasoning."
     )
 
-    symbols: List[str] = Field(
+    symbols: list[str] = Field(
         default_factory=list,
-        description="Explicit code symbols mentioned in the question, such as functions, classes, methods, or variables."
+        description="Explicit code symbols mentioned in the question, such as functions, classes, methods, or variables.",
     )
 
     # No length constraints: a slightly off-spec list must not invalidate the whole plan.
     # The agent de-duplicates and caps the queries it actually searches with.
-    queries: List[str] = Field(
-        default_factory=list,
-        description="One or two short retrieval-oriented search queries."
-    )
+    queries: list[str] = Field(default_factory=list, description="One or two short retrieval-oriented search queries.")
+
 
 RetrievalStrategy = Literal[
     "vector",

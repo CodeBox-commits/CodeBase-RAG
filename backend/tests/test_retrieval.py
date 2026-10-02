@@ -13,16 +13,19 @@ def _hit(symbol, score, filepath="a.py", start_line=1):
 
 # --- RRF fusion -------------------------------------------------------------
 
+
 def test_fusion_scores_are_unified_and_normalised():
-    fused = HybridSearch(rrf_k=60).fuse([
-        ("vector", [_hit("a", 0.91), _hit("b", 0.80)]),
-        ("vector", [_hit("a", 0.88)]),
-        ("bm25", [_hit("a", 12.0), _hit("c", 7.5)]),
-    ])
+    fused = HybridSearch(rrf_k=60).fuse(
+        [
+            ("vector", [_hit("a", 0.91), _hit("b", 0.80)]),
+            ("vector", [_hit("a", 0.88)]),
+            ("bm25", [_hit("a", 12.0), _hit("c", 7.5)]),
+        ]
+    )
 
     top = fused[0]
     assert top["symbol"] == "a"
-    assert top["score"] == pytest.approx(1.0)          # ranked first in every list
+    assert top["score"] == pytest.approx(1.0)  # ranked first in every list
     assert top["sources"] == ["vector", "bm25"]
     assert top["vector_score"] == pytest.approx(0.91)  # best of the two vector lists
     assert top["bm25_score"] == pytest.approx(12.0)
@@ -35,6 +38,7 @@ def test_fusion_handles_no_lists():
 
 
 # --- BM25 query construction ------------------------------------------------
+
 
 def test_extract_terms_drops_stopwords_and_keeps_identifiers():
     terms = LexicalDB.extract_terms(["Where is process_repository defined?", "CodeAgent.run"])
@@ -58,7 +62,10 @@ def test_exact_symbol_matches_lead_but_bm25_order_is_otherwise_kept():
     ]
     ranked = LexicalDB.rank_exact_symbols_first(hits, ["timestampsigner"])
     assert [h["symbol"] for h in ranked] == [
-        "TimestampSigner", "TimestampSigner.unsign", "Other.helper", "pkg.unsign",
+        "TimestampSigner",
+        "TimestampSigner.unsign",
+        "Other.helper",
+        "pkg.unsign",
     ]
 
 
@@ -69,17 +76,22 @@ def test_build_query_rejects_unsafe_or_empty_terms():
 
 # --- URL normalisation ------------------------------------------------------
 
-@pytest.mark.parametrize("raw", [
-    "https://github.com/a/b",
-    "https://github.com/a/b/",
-    "https://github.com/a/b.git",
-    " https://github.com/a/b.git/ ",
-])
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "https://github.com/a/b",
+        "https://github.com/a/b/",
+        "https://github.com/a/b.git",
+        " https://github.com/a/b.git/ ",
+    ],
+)
 def test_repo_urls_normalise_to_one_key(raw):
     assert normalize_repo_url(raw) == "https://github.com/a/b"
 
 
 # --- agent retrieval node ---------------------------------------------------
+
 
 @pytest.fixture
 def bare_agent():
@@ -144,10 +156,12 @@ def test_graph_search_anchors_on_hits_and_question_symbols(bare_agent, monkeypat
     monkeypatch.setattr(agent_module.graph_db, "connect", lambda: None)
     monkeypatch.setattr(agent_module.graph_db, "get_symbol_context", fake_context)
 
-    out = bare_agent.node_graph_search(_state(
-        symbols=["save"],
-        vector_results=[{"filepath": "m.py", "symbol": "Base.save"}, {"filepath": None, "symbol": "x"}],
-    ))
+    out = bare_agent.node_graph_search(
+        _state(
+            symbols=["save"],
+            vector_results=[{"filepath": "m.py", "symbol": "Base.save"}, {"filepath": None, "symbol": "x"}],
+        )
+    )
 
     assert out["graph_results"] == [{"name": "Base.save"}]
     assert captured["anchors"] == [{"filepath": "m.py", "symbol": "Base.save"}]
@@ -156,14 +170,27 @@ def test_graph_search_anchors_on_hits_and_question_symbols(bare_agent, monkeypat
 
 
 def test_graph_context_formatting_includes_multi_hop_neighbours():
-    text = CodeAgent._format_graph_context([{
-        "node_labels": ["Symbol", "Function", "Method"],
-        "name": "User.rename", "filepath": "m.py", "start_line": 10, "end_line": 14,
-        "owner": "User", "docstring": None, "bases": [], "subclasses": [], "methods": [],
-        "calls": [{"name": "Base.save", "filepath": "m.py", "line": 3, "hops": 1},
-                  {"name": "Base.validate", "filepath": "m.py", "line": 6, "hops": 2}],
-        "called_by": [],
-    }])
+    text = CodeAgent._format_graph_context(
+        [
+            {
+                "node_labels": ["Symbol", "Function", "Method"],
+                "name": "User.rename",
+                "filepath": "m.py",
+                "start_line": 10,
+                "end_line": 14,
+                "owner": "User",
+                "docstring": None,
+                "bases": [],
+                "subclasses": [],
+                "methods": [],
+                "calls": [
+                    {"name": "Base.save", "filepath": "m.py", "line": 3, "hops": 1},
+                    {"name": "Base.validate", "filepath": "m.py", "line": 6, "hops": 2},
+                ],
+                "called_by": [],
+            }
+        ]
+    )
     assert text.startswith("Method 'User.rename' defined in m.py (Lines 10-14)")
     assert "Member of class: User" in text
     assert "Base.save (m.py:3)" in text
@@ -172,13 +199,18 @@ def test_graph_context_formatting_includes_multi_hop_neighbours():
 
 # --- cost optimisations -----------------------------------------------------
 
+
 def test_planner_node_maps_one_plan_onto_state(bare_agent):
     from app.core.schemas import QueryPlan
 
     class FakePlanner:
         def plan(self, question):
-            return QueryPlan(query_type="dependency", complexity="simple",
-                             symbols=["validate_token"], queries=["validate_token callers"])
+            return QueryPlan(
+                query_type="dependency",
+                complexity="simple",
+                symbols=["validate_token"],
+                queries=["validate_token callers"],
+            )
 
     bare_agent.query_planner = FakePlanner()
     out = bare_agent.node_query_planner(_state())
@@ -219,8 +251,16 @@ def test_query_embeddings_are_one_batched_call_capped_at_three(bare_agent):
 
 def _snippet(symbol, start, end, lines, chunk_type="function", filepath="m.py"):
     code = "\n".join(f"line {i}" for i in range(lines))
-    return {"symbol": symbol, "filepath": filepath, "start_line": start, "end_line": end,
-            "chunk_type": chunk_type, "code_text": code, "score": 0.5, "sources": ["vector"]}
+    return {
+        "symbol": symbol,
+        "filepath": filepath,
+        "start_line": start,
+        "end_line": end,
+        "chunk_type": chunk_type,
+        "code_text": code,
+        "score": 0.5,
+        "sources": ["vector"],
+    }
 
 
 def test_long_snippets_are_truncated_to_the_line_cap():
@@ -250,12 +290,21 @@ def test_methods_are_not_dropped_for_their_class_header():
 
 
 def test_graph_payload_flattens_context_into_typed_edges():
-    payload = CodeAgent._graph_payload([{
-        "node_labels": ["Symbol", "Function", "Method"], "name": "User.rename", "filepath": "m.py",
-        "owner": "User", "bases": [], "subclasses": [], "methods": [],
-        "calls": [{"name": "Base.save", "filepath": "m.py", "line": 3, "hops": 1}],
-        "called_by": [{"name": "cli.main", "filepath": "cli.py", "line": 9, "hops": 2}],
-    }])
+    payload = CodeAgent._graph_payload(
+        [
+            {
+                "node_labels": ["Symbol", "Function", "Method"],
+                "name": "User.rename",
+                "filepath": "m.py",
+                "owner": "User",
+                "bases": [],
+                "subclasses": [],
+                "methods": [],
+                "calls": [{"name": "Base.save", "filepath": "m.py", "line": 3, "hops": 1}],
+                "called_by": [{"name": "cli.main", "filepath": "cli.py", "line": 9, "hops": 2}],
+            }
+        ]
+    )
     ids = {n["id"]: n for n in payload["nodes"]}
     assert ids["User.rename"]["anchor"] is True and ids["User.rename"]["kind"] == "method"
     assert {(e["source"], e["target"], e["type"]) for e in payload["edges"]} == {
@@ -268,15 +317,31 @@ def test_graph_payload_flattens_context_into_typed_edges():
 def test_run_stream_emits_one_event_per_step_then_the_answer(bare_agent, monkeypatch):
     from types import SimpleNamespace
 
-    bare_agent.query_planner = SimpleNamespace(plan=lambda q: SimpleNamespace(
-        query_type="dependency", complexity="simple", symbols=["save"], queries=["save callers"],
-    ))
+    bare_agent.query_planner = SimpleNamespace(
+        plan=lambda q: SimpleNamespace(
+            query_type="dependency",
+            complexity="simple",
+            symbols=["save"],
+            queries=["save callers"],
+        )
+    )
     bare_agent.embeddings = SimpleNamespace(embed_queries=lambda qs: [[0.1] * 768 for _ in qs])
     bare_agent._invoke_llm_with_retry = lambda system, user: "final answer"
-    monkeypatch.setattr(agent_module.hybrid_search, "search", lambda **kw: [
-        {"symbol": "Base.save", "filepath": "m.py", "start_line": 3, "end_line": 5,
-         "score": 1.0, "sources": ["vector", "bm25"], "code_text": "def save(self): ..."},
-    ])
+    monkeypatch.setattr(
+        agent_module.hybrid_search,
+        "search",
+        lambda **kw: [
+            {
+                "symbol": "Base.save",
+                "filepath": "m.py",
+                "start_line": 3,
+                "end_line": 5,
+                "score": 1.0,
+                "sources": ["vector", "bm25"],
+                "code_text": "def save(self): ...",
+            },
+        ],
+    )
     monkeypatch.setattr(agent_module.graph_db, "connect", lambda: None)
     monkeypatch.setattr(agent_module.graph_db, "get_symbol_context", lambda **kw: [])
     bare_agent.workflow = bare_agent._build_workflow()
@@ -284,7 +349,12 @@ def test_run_stream_emits_one_event_per_step_then_the_answer(bare_agent, monkeyp
     events = list(bare_agent.run_stream("What calls save?", "https://github.com/a/b"))
 
     assert [e.get("node") for e in events[:-1]] == [
-        "query_planner", "retrieval_router", "embed_queries", "retrieve", "rerank", "graph_search",
+        "query_planner",
+        "retrieval_router",
+        "embed_queries",
+        "retrieve",
+        "rerank",
+        "graph_search",
     ]
     assert events[1]["data"] == {"strategy": "hybrid"}
     assert events[2]["data"]["dimensions"] == 768 and len(events[2]["data"]["previews"][0]) == 24
