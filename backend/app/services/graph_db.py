@@ -216,4 +216,31 @@ class Neo4jService:
             )
             return [record.data() for record in result]
 
+    def get_repository_graph(self, repo_url: str, limit: int = 400) -> Dict[str, Any]:
+        """The most connected symbols of a repository and the edges between them."""
+        nodes_query = """
+        MATCH (n:Symbol {repo_url: $repo_url})
+        WITH n, COUNT { (n)--(:Symbol) } AS degree
+        ORDER BY degree DESC, n.qualified_name
+        LIMIT $limit
+        RETURN n.filepath + "::" + n.qualified_name AS id,
+               n.qualified_name AS name, n.type AS kind, n.filepath AS filepath,
+               n.start_line AS start_line, n.end_line AS end_line, degree
+        """
+        edges_query = """
+        MATCH (a:Symbol {repo_url: $repo_url})-[r:CALLS|INHERITS|HAS_METHOD]->(b:Symbol {repo_url: $repo_url})
+        WITH a.filepath + "::" + a.qualified_name AS source,
+             b.filepath + "::" + b.qualified_name AS target, type(r) AS type
+        WHERE source IN $ids AND target IN $ids
+        RETURN source, target, type
+        """
+        with self.driver.session() as session:
+            nodes = [r.data() for r in session.run(nodes_query, repo_url=repo_url, limit=limit)]
+            ids = [n["id"] for n in nodes]
+            edges = [r.data() for r in session.run(edges_query, repo_url=repo_url, ids=ids)]
+            total = session.run(
+                "MATCH (n:Symbol {repo_url: $repo_url}) RETURN count(n) AS c", repo_url=repo_url
+            ).single()["c"]
+        return {"nodes": nodes, "edges": edges, "total_symbols": total}
+
 graph_db = Neo4jService()

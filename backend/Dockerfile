@@ -21,6 +21,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# 6b. Bake the reranker model (~34 MB ONNX) into the image so the first question doesn't download it
+ENV RERANKER_CACHE_DIR=/opt/flashrank
+RUN python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir='/opt/flashrank')"
+
 # 7. Copy the rest of the backend application code
 COPY . .
 

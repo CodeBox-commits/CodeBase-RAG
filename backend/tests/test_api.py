@@ -16,6 +16,10 @@ class FakeAgent:
         self.calls.append((question, repo_url))
         return f"answer for {repo_url}"
 
+    def run_stream(self, question, repo_url):
+        yield {"type": "step", "node": "query_planner", "data": {"query_type": "general"}}
+        yield {"type": "token", "content": self.run(question, repo_url)}
+
 
 @pytest.fixture
 def client():
@@ -50,7 +54,8 @@ def test_chat_streams_sse_events(client, fake_agent):
     })
 
     events = [e for e in res.text.split("\n\n") if e]
-    assert json.loads(events[0].removeprefix("data: ")) == {
+    assert json.loads(events[0].removeprefix("data: "))["node"] == "query_planner"
+    assert json.loads(events[1].removeprefix("data: ")) == {
         "type": "token", "content": "answer for https://github.com/a/b",
     }
     assert events[-1] == "data: [DONE]"

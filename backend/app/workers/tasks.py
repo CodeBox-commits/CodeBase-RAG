@@ -1,10 +1,9 @@
 import os
-import time
 import tempfile
 import subprocess
 import logging
 from pathlib import Path
-from typing import List
+from typing import Callable, Dict, List, Optional, Set, Tuple
 from app.workers.celery_app import celery_app
 from app.services.graph_db import graph_db
 from app.services.vector_db import vector_db
@@ -13,13 +12,56 @@ from app.core.parser import CodeParser
 from app.core.call_resolver import resolve_relationships
 from app.core.schemas import ExtractedChunk
 from app.core.urls import normalize_repo_url
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from app.services.embeddings import CachedEmbeddings, EmbeddingDimensionError, build_embeddings
 
 logger = logging.getLogger(__name__)
+
+# Gemini's per-request maximum; chunks from many files share a request.
+EMBED_BATCH_SIZE = 100
 
 
 class IngestionError(Exception):
     """Raised so Celery records the task as FAILURE instead of a SUCCESS with an error payload."""
+
+
+ParsedFile = Tuple[str, List[ExtractedChunk]]
+
+
+def embed_chunks(
+    embedder: CachedEmbeddings,
+    parsed_files: List[ParsedFile],
+    batch_size: int = EMBED_BATCH_SIZE,
+    on_progress: Optional[Callable[[int, int], None]] = None,
+) -> Tuple[Dict[str, List[List[float]]], Set[str]]:
+    """Embeds every chunk in cross-file batches.
+
+    Returns the vectors per file (in chunk order) and the files that couldn't be embedded
+    because a batch holding one of their chunks failed after retries.
+    """
+    flat = [(path, chunk) for path, chunks in parsed_files for chunk in chunks]
+    vectors_by_file: Dict[str, List[List[float]]] = {path: [] for path, _ in parsed_files}
+    failed: Set[str] = set()
+
+    for i in range(0, len(flat), batch_size):
+        batch = flat[i:i + batch_size]
+        try:
+            vectors = embedder.embed_documents([chunk.source_code for _, chunk in batch])
+        except EmbeddingDimensionError as e:
+            # Every batch would fail the same way; stop with the real reason.
+            raise IngestionError(str(e)) from e
+        except Exception as e:
+            paths = {path for path, _ in batch}
+            logger.warning(f"Embedding failed for {len(batch)} chunks across {len(paths)} files: {e}")
+            failed.update(paths)
+            continue
+        for (path, _), vector in zip(batch, vectors):
+            vectors_by_file[path].append(vector)
+        if on_progress:
+            on_progress(min(i + batch_size, len(flat)), len(flat))
+
+    for path in failed:
+        vectors_by_file.pop(path, None)
+    return vectors_by_file, failed
 
 
 @celery_app.task(bind=True, name="process_repository")
@@ -34,23 +76,18 @@ def process_repository(self, repo_url: str):
     graph_db.connect()
     lexical_db.connect()
 
-    embedding_model = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
-
-    embeddings = GoogleGenerativeAIEmbeddings(
-      model=embedding_model,
-      google_api_key=api_key,
-      output_dimensionality=vector_db.vector_size,
+    # The embedder validates every vector's dimension, so no probe embedding is needed here.
+    embedder = build_embeddings(
+        api_key=api_key,
+        model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
+        dimensions=vector_db.vector_size,
     )
 
     try:
-      sample_embedding = embeddings.embed_query("dimension_check")
-      vector_db.connect(vector_size=len(sample_embedding))
+        vector_db.connect()
     except Exception as e:
-       logger.error(
-          f"Failed to initialize embeddings/vector DB: {e}",
-          exc_info=True
-       )
-       raise IngestionError(f"Vector DB initialization failed: {e}") from e
+        logger.error(f"Failed to initialize vector DB: {e}", exc_info=True)
+        raise IngestionError(f"Vector DB initialization failed: {e}") from e
 
     logger.info(f"Starting ingestion for {repo_url}")
 
@@ -59,7 +96,7 @@ def process_repository(self, repo_url: str):
     lexical_db.delete_repository(repo_url)
     graph_db.merge_repository(repo_url)
 
-    self.update_state(state="CLONING", meta={"step": "Downloading repository"})
+    self.update_state(state="CLONING", meta={"step": "Cloning repository"})
 
     with tempfile.TemporaryDirectory() as temp_dir:
         repo_path = Path(temp_dir) / "repo"
@@ -80,71 +117,100 @@ def process_repository(self, repo_url: str):
             logger.error(f"Git clone failed: {e.stderr}")
             raise IngestionError("Invalid repository or access denied") from e
 
-        self.update_state(state="PARSING", meta={"step": "Extracting AST definitions & vectors"})
+        source_files = [
+            f for f in repo_path.rglob("*.py")
+            if not (".venv" in f.parts or ".git" in f.parts or "tests" in f.parts)
+        ]
 
         parser = CodeParser()
-        parsed_files_count = 0
+        parsed_files: List[ParsedFile] = []
         failed_files_count = 0
-        # Every successfully stored symbol; call edges can only be resolved once all files are known.
-        ingested_chunks: List[ExtractedChunk] = []
 
-        for file_path in repo_path.rglob("*.py"):
-            if ".venv" in file_path.parts or ".git" in file_path.parts or "tests" in file_path.parts:
-                continue
+        def parse_progress(done: int):
+            self.update_state(state="PARSING", meta={
+                "step": "Parsing the AST",
+                "files_total": len(source_files),
+                "files_done": done,
+                "chunks": sum(len(c) for _, c in parsed_files),
+            })
+
+        parse_progress(0)
+        for index, file_path in enumerate(source_files, 1):
+            if index % 10 == 0:
+                parse_progress(index)
 
             try:
                 content = file_path.read_text(encoding="utf-8")
                 relative_path = str(file_path.relative_to(repo_path))
-
                 chunks = parser.parse_python_source(relative_path, content)
-                if not chunks:
-                    continue
+            except Exception as e:
+                logger.warning(f"AST Parsing failed for {file_path.name}: {str(e)}")
+                failed_files_count += 1
+                continue
+            if chunks:
+                parsed_files.append((relative_path, chunks))
 
-                texts_to_embed = [chunk.source_code for chunk in chunks]
+        chunk_total = sum(len(chunks) for _, chunks in parsed_files)
 
-                embeddings_list = []
-                batch_size = 100
-                for i in range(0, len(texts_to_embed), batch_size):
-                    batch = texts_to_embed[i:i+batch_size]
-                    for attempt in range(3):
-                        try:
-                            embeddings_list.extend(embeddings.embed_documents(batch))
-                            break
-                        except Exception as e:
-                            if attempt == 2:
-                                raise e
-                            time.sleep(2 ** attempt)
+        def embed_progress(done: int, total: int):
+            self.update_state(state="EMBEDDING", meta={
+                "step": "Embedding code chunks",
+                "files_total": len(source_files),
+                "files_done": len(source_files),
+                "chunks": chunk_total,
+                "chunks_done": done,
+                "chunks_total": total,
+            })
 
-                vector_items = []
-                for chunk, embedding in zip(chunks, embeddings_list):
-                    vector_items.append({
+        embed_progress(0, chunk_total)
+        vectors_by_file, embed_failures = embed_chunks(embedder, parsed_files, on_progress=embed_progress)
+        failed_files_count += len(embed_failures)
+
+        parsed_files_count = 0
+        # Every successfully stored symbol; call edges can only be resolved once all files are known.
+        ingested_chunks: List[ExtractedChunk] = []
+
+        for stored, (relative_path, chunks) in enumerate(parsed_files, 1):
+            if relative_path in embed_failures:
+                continue
+            if stored % 5 == 1:
+                self.update_state(state="STORING", meta={
+                    "step": "Writing to Neo4j, Qdrant and RediSearch",
+                    "chunks": chunk_total,
+                    "store_total": len(parsed_files),
+                    "store_done": stored - 1,
+                })
+
+            try:
+                vector_items = [
+                    {
                         "name": chunk.qualified_name,
                         "text": chunk.source_code,
                         "type": chunk.type,
                         "language": "python",
                         "start_line": chunk.start_line,
                         "end_line": chunk.end_line,
-                        "vector": embedding
-                    })
+                        "vector": vector,
+                    }
+                    for chunk, vector in zip(chunks, vectors_by_file[relative_path])
+                ]
 
                 graph_db.merge_symbols(repo_url, chunks)
-                if vector_items:
-                    vector_db.upsert_batch(repo_url, relative_path, vector_items)
-                    lexical_db.index_batch(repo_url, relative_path, vector_items)
+                vector_db.upsert_batch(repo_url, relative_path, vector_items)
+                lexical_db.index_batch(repo_url, relative_path, vector_items)
                 ingested_chunks.extend(chunks)
                 parsed_files_count += 1
 
             except Exception as e:
-                logger.warning(f"AST Parsing & Ingestion failed for {file_path.name}: {str(e)}")
+                logger.warning(f"Ingestion failed for {relative_path}: {str(e)}")
                 failed_files_count += 1
-                continue
 
         if parsed_files_count == 0:
             if failed_files_count > 0:
                 raise IngestionError(f"All {failed_files_count} Python files failed to ingest")
             raise IngestionError("No Python source files found in repository")
 
-        self.update_state(state="LINKING", meta={"step": "Resolving calls and inheritance"})
+        self.update_state(state="LINKING", meta={"step": "Resolving calls and inheritance", "symbols": len(ingested_chunks)})
 
         relationships = resolve_relationships(ingested_chunks)
         graph_db.merge_relationships(repo_url, relationships)
@@ -163,5 +229,6 @@ def process_repository(self, repo_url: str):
             "failed_files": failed_files_count,
             "symbols": len(ingested_chunks),
             "call_edges": len(relationships.calls),
+            "inherits_edges": len(relationships.inherits),
             "repo_url": repo_url,
         }
