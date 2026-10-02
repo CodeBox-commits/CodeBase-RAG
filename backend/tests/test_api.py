@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -83,6 +84,10 @@ def test_index_submits_normalised_url(client, monkeypatch):
     assert submitted == ["https://github.com/a/b"]
 
 
+@pytest.mark.skipif(
+    not (Path(__file__).parents[1] / "app" / "static" / "index.html").exists(),
+    reason="frontend not built (run `npm run build` in frontend/)",
+)
 def test_ui_is_served_at_root_without_shadowing_api(client):
     res = client.get("/")
     assert res.status_code == 200

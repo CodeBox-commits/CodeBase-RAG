@@ -11,6 +11,7 @@ genv/
 
 .env
 .env.*
+!.env.example
 
 .DS_Store
 .AppleDouble
@@ -23,3 +24,6 @@ Thumbs.db
 *.swo
 
 backend/scarthpad.py
+
+# Frontend build output (built into the Docker image, never committed)
+backend/app/static/

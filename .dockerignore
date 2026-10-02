@@ -1,0 +1,18 @@
+# Build context is the repo root; keep secrets, venvs and local builds out of the image.
+**/.git
+**/.env
+**/.env.*
+!**/.env.example
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.DS_Store
+.vscode
+backend/genv
+backend/venv
+backend/.venv
+backend/tests
+backend/scarthpad.py
+backend/app/static
+frontend/node_modules
+frontend/dist

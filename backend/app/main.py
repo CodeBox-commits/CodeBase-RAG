@@ -122,4 +122,7 @@ async def health_check():
 
 
 # Mounted last so API routes, /health and /docs take precedence over the UI.
-app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="ui")
+# The UI is build output (frontend `npm run build`); the API also runs without it.
+STATIC_DIR = Path(__file__).parent / "static"
+if (STATIC_DIR / "index.html").exists():
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="ui")
