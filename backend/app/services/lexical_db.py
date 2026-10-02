@@ -64,6 +64,13 @@ class LexicalDB:
         self.key_prefix = "code_chunk:"
         self.client: redis.Redis | None = None
 
+    def _require_client(self) -> redis.Redis:
+        """The client, connecting first if needed (callers never see None)."""
+        if self.client is None:
+            self.connect()
+        assert self.client is not None
+        return self.client
+
     def connect(self):
         if self.client is not None:
             return
@@ -86,7 +93,7 @@ class LexicalDB:
     def _ensure_index(self):
         """Create the RediSearch index if it does not already exist."""
         try:
-            self.client.ft(self.index_name).info()
+            self._require_client().ft(self.index_name).info()
             return
         except redis.ResponseError:
             pass
@@ -106,8 +113,8 @@ class LexicalDB:
             index_type=IndexType.HASH,
         )
 
-        self.client.ft(self.index_name).create_index(
-            schema,
+        self._require_client().ft(self.index_name).create_index(
+            list(schema),
             definition=definition,
         )
 
@@ -125,7 +132,7 @@ class LexicalDB:
         if self.client is None:
             self.connect()
 
-        pipe = self.client.pipeline(transaction=False)
+        pipe = self._require_client().pipeline(transaction=False)
 
         for item in items:
             key = self._make_key(
@@ -161,12 +168,12 @@ class LexicalDB:
         while True:
             query = Query(f"@repo_url:{{{self._escape_tag(repo_url)}}}").no_content().paging(0, page_size)
 
-            results = self.client.ft(self.index_name).search(query)
+            results = self._require_client().ft(self.index_name).search(query)
 
             if not results.docs:
                 break
 
-            pipe = self.client.pipeline(transaction=False)
+            pipe = self._require_client().pipeline(transaction=False)
 
             for doc in results.docs:
                 pipe.delete(doc.id)
@@ -212,7 +219,7 @@ class LexicalDB:
             )
         )
 
-        results = self.client.ft(self.index_name).search(query)
+        results = self._require_client().ft(self.index_name).search(query)
         hits = [
             {
                 "repo_url": doc.repo_url,

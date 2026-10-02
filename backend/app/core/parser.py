@@ -1,5 +1,6 @@
 # backend/app/core/parser.py
 import ast
+from typing import Literal
 
 from app.core.schemas import ExtractedChunk
 
@@ -74,7 +75,7 @@ class RepositoryASTVisitor(ast.NodeVisitor):
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
         self._process_function(node)
 
-    def _process_function(self, node: ast.AST):
+    def _process_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef):
         start_line = node.lineno
         end_line = getattr(node, "end_lineno", start_line)
         raw_code_slice = self._slice(start_line, end_line)
@@ -89,7 +90,7 @@ class RepositoryASTVisitor(ast.NodeVisitor):
                 if resolved_decorator:
                     structural_dependencies.append(resolved_decorator)
 
-        nodes_to_explore = list(node.body)
+        nodes_to_explore: list[ast.AST] = list(node.body)
         while nodes_to_explore:
             current_node = nodes_to_explore.pop(0)
 
@@ -107,7 +108,7 @@ class RepositoryASTVisitor(ast.NodeVisitor):
         # Only a definition directly inside a class body is a method; a function nested
         # inside a method is a plain (nested) function.
         is_method = bool(self._scope) and self._scope[-1][1] == "class"
-        chunk_type = "method" if is_method else "function"
+        chunk_type: Literal["method", "function"] = "method" if is_method else "function"
 
         chunk = ExtractedChunk(
             name=node.name,

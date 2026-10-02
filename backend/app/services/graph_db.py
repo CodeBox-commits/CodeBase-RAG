@@ -2,7 +2,7 @@ import logging
 import os
 from typing import Any
 
-from neo4j import GraphDatabase, exceptions
+from neo4j import Driver, GraphDatabase, exceptions
 
 from app.core.call_resolver import Edge, Relationships
 from app.core.schemas import ExtractedChunk
@@ -25,6 +25,12 @@ _SCHEMA_STATEMENTS = [
 
 _EDGE_TYPES = ("CALLS", "INHERITS", "HAS_METHOD")
 _EDGE_BATCH_SIZE = 1000
+
+
+def _run_write(tx: Any, query: str, **params: Any) -> None:
+    """Transaction function for session.execute_write (retried by the driver on transient errors)."""
+    tx.run(query, **params).consume()
+
 
 _CONTEXT_QUERY = """
 CALL {
@@ -75,7 +81,14 @@ class Neo4jService:
         self.uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
         self.user = os.getenv("NEO4J_USER", "neo4j")
         self.password = os.getenv("NEO4J_PASSWORD", "password123")
-        self.driver = None
+        self.driver: Driver | None = None
+
+    def _require_driver(self) -> Driver:
+        """The driver, connecting first if needed (callers never see None)."""
+        if self.driver is None:
+            self.connect()
+        assert self.driver is not None
+        return self.driver
 
     def connect(self):
         if not self.driver:
@@ -92,7 +105,7 @@ class Neo4jService:
                 raise e
 
     def _ensure_schema(self):
-        with self.driver.session() as session:
+        with self._require_driver().session() as session:
             for statement in _SCHEMA_STATEMENTS:
                 session.run(statement).consume()
 
@@ -107,7 +120,7 @@ class Neo4jService:
         ON MATCH SET r.last_indexed = timestamp()
         RETURN id(r)
         """
-        with self.driver.session() as session:
+        with self._require_driver().session() as session:
             session.execute_write(lambda tx: tx.run(query, url=repo_url).consume())
 
     def delete_repository_data(self, repo_url: str):
@@ -119,7 +132,7 @@ class Neo4jService:
         CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 1000 ROWS
         """
         repo_query = "MATCH (r:Repository {url: $repo_url}) DETACH DELETE r"
-        with self.driver.session() as session:
+        with self._require_driver().session() as session:
             session.run(symbols_query, repo_url=repo_url).consume()
             session.run(repo_query, repo_url=repo_url).consume()
 
@@ -159,7 +172,7 @@ class Neo4jService:
             }
             for c in chunks
         ]
-        with self.driver.session() as session:
+        with self._require_driver().session() as session:
             session.execute_write(lambda tx: tx.run(query, repo_url=repo_url, rows=rows).consume())
 
     def merge_relationships(self, repo_url: str, relationships: Relationships):
@@ -179,10 +192,10 @@ class Neo4jService:
         MERGE (a)-[:{rel_type}]->(b)
         """
         rows = [{"src_file": src[0], "src_name": src[1], "dst_file": dst[0], "dst_name": dst[1]} for src, dst in edges]
-        with self.driver.session() as session:
+        with self._require_driver().session() as session:
             for i in range(0, len(rows), _EDGE_BATCH_SIZE):
                 batch = rows[i : i + _EDGE_BATCH_SIZE]
-                session.execute_write(lambda tx, batch=batch: tx.run(query, repo_url=repo_url, edges=batch).consume())
+                session.execute_write(_run_write, query, repo_url=repo_url, edges=batch)
 
     def get_symbol_context(
         self,
@@ -202,7 +215,7 @@ class Neo4jService:
             return []
         # Variable-length bounds can't be query parameters; int() keeps this injection-safe.
         query = _CONTEXT_QUERY.replace("__MAX_DEPTH__", str(int(max_depth)))
-        with self.driver.session() as session:
+        with self._require_driver().session() as session:
             result = session.run(
                 query,
                 repo_url=repo_url,
@@ -231,13 +244,14 @@ class Neo4jService:
         WHERE source IN $ids AND target IN $ids
         RETURN source, target, type
         """
-        with self.driver.session() as session:
+        with self._require_driver().session() as session:
             nodes = [r.data() for r in session.run(nodes_query, repo_url=repo_url, limit=limit)]
             ids = [n["id"] for n in nodes]
             edges = [r.data() for r in session.run(edges_query, repo_url=repo_url, ids=ids)]
-            total = session.run(
+            record = session.run(
                 "MATCH (n:Symbol {repo_url: $repo_url}) RETURN count(n) AS c", repo_url=repo_url
-            ).single()["c"]
+            ).single()
+            total = record["c"] if record else 0
         return {"nodes": nodes, "edges": edges, "total_symbols": total}
 
 

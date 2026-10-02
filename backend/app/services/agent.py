@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
@@ -214,7 +214,7 @@ class CodeAgent:
             "retrieval_strategy": strategy,
         }
 
-    def _search_queries(self, state: AgentState) -> list[str]:
+    def _search_queries(self, state: Mapping[str, Any]) -> list[str]:
         """Original question plus the rewriter's retrieval queries, de-duplicated."""
         queries: list[str] = []
         for q in [state["question"], *state.get("rewritten_queries", [])]:
@@ -223,7 +223,7 @@ class CodeAgent:
                 queries.append(q)
         return queries[: self.config.max_query_embeddings]
 
-    def _lexical_plan(self, state: AgentState) -> tuple[list[str], tuple[str, ...]]:
+    def _lexical_plan(self, state: Mapping[str, Any]) -> tuple[list[str], tuple[str, ...]]:
         symbols = state.get("symbols", [])
         if state["retrieval_strategy"] == "hybrid":
             # Full BM25 over symbol, path and code text using every retrieval query.

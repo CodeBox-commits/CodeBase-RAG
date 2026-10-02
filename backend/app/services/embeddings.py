@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 import redis
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from pydantic import SecretStr
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,8 @@ class CachedEmbeddings:
             cache_hits,
             len(pending),
         )
-        return vectors
+        # Every slot is filled by now: either a cache hit or a fresh embedding.
+        return [vector for vector in vectors if vector is not None]
 
     def _call_api(self, texts: list[str], task_type: str, attempts: int) -> list[list[float]]:
         vectors: list[list[float]] = []
@@ -155,7 +157,7 @@ def build_embeddings(api_key: str, model: str, dimensions: int) -> CachedEmbeddi
         )
     client = GoogleGenerativeAIEmbeddings(
         model=model,
-        google_api_key=api_key,
+        api_key=SecretStr(api_key),
         output_dimensionality=dimensions,
     )
     return CachedEmbeddings(client, model, dimensions, cache=cache, ttl_seconds=ttl_seconds)

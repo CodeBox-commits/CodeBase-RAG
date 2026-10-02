@@ -17,7 +17,14 @@ class QdrantService:
         self.port = int(os.getenv("QDRANT_PORT", 6333))
         self.collection_name = os.getenv("QDRANT_COLLECTION", "code_snippets")
         self.vector_size = int(os.getenv("VECTOR_SIZE", 768))
-        self.client = None
+        self.client: QdrantClient | None = None
+
+    def _require_client(self) -> QdrantClient:
+        """The client, connecting first if needed (callers never see None)."""
+        if self.client is None:
+            self.connect()
+        assert self.client is not None
+        return self.client
 
     def connect(self, vector_size: int | None = None):
         if self.client:
@@ -49,15 +56,18 @@ class QdrantService:
 
     def _ensure_collection_exists(self):
         try:
-            collection = self.client.get_collection(self.collection_name)
-            if collection.config.params.vectors.size != self.vector_size:
+            collection = self._require_client().get_collection(self.collection_name)
+            vectors = collection.config.params.vectors
+            # Single unnamed vector config; named-vector collections aren't used here.
+            size = vectors.size if isinstance(vectors, models.VectorParams) else None
+            if size != self.vector_size:
                 raise ValueError(
-                    f"Qdrant collection '{self.collection_name}' has dimension {collection.config.params.vectors.size}, but {self.vector_size} is required."
+                    f"Qdrant collection '{self.collection_name}' has dimension {size}, but {self.vector_size} is required."
                 )
         except UnexpectedResponse as e:
             if e.status_code == 404:
                 logger.info(f"Creating Qdrant collection: {self.collection_name} (dim: {self.vector_size})")
-                self.client.create_collection(
+                self._require_client().create_collection(
                     collection_name=self.collection_name,
                     vectors_config=models.VectorParams(size=self.vector_size, distance=models.Distance.COSINE),
                 )
@@ -72,22 +82,26 @@ class QdrantService:
         score_threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         self.connect(vector_size=len(query_vector))
-        hits = self.client.query_points(
-            collection_name=self.collection_name,
-            query=query_vector,
-            query_filter=self.build_repo_filter(repo_url),
-            limit=limit,
-            score_threshold=score_threshold,
-        ).points
+        hits = (
+            self._require_client()
+            .query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                query_filter=self.build_repo_filter(repo_url),
+                limit=limit,
+                score_threshold=score_threshold,
+            )
+            .points
+        )
         return [
             {
-                "symbol": hit.payload.get("symbol"),
-                "filepath": hit.payload.get("filepath"),
-                "language": hit.payload.get("language"),
-                "chunk_type": hit.payload.get("chunk_type"),
-                "start_line": hit.payload.get("start_line"),
-                "end_line": hit.payload.get("end_line"),
-                "code_text": hit.payload.get("code_text", ""),
+                "symbol": (hit.payload or {}).get("symbol"),
+                "filepath": (hit.payload or {}).get("filepath"),
+                "language": (hit.payload or {}).get("language"),
+                "chunk_type": (hit.payload or {}).get("chunk_type"),
+                "start_line": (hit.payload or {}).get("start_line"),
+                "end_line": (hit.payload or {}).get("end_line"),
+                "code_text": (hit.payload or {}).get("code_text", ""),
                 "score": hit.score,
             }
             for hit in hits
@@ -100,7 +114,7 @@ class QdrantService:
         if not self.client:
             self.connect()
         try:
-            self.client.delete(
+            self._require_client().delete(
                 collection_name=self.collection_name,
                 points_selector=models.Filter(
                     must=[models.FieldCondition(key="repo_url", match=models.MatchValue(value=repo_url))]
@@ -147,7 +161,7 @@ class QdrantService:
 
             for attempt in range(MAX_RETRIES):
                 try:
-                    self.client.upsert(collection_name=self.collection_name, points=chunk, wait=False)
+                    self._require_client().upsert(collection_name=self.collection_name, points=chunk, wait=False)
                     break
                 except Exception as e:
                     if attempt == MAX_RETRIES - 1:
