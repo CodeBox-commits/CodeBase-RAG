@@ -1,0 +1,148 @@
+# Production stack. Runs pre-built images; nothing is built on the server.
+#
+#   cp deploy/.env.example deploy/.env      # then fill in real values
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d
+#
+# Only Caddy publishes ports. Databases live on an internal network with no host
+# ports and no internet access.
+name: gitrag-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-app: &app
+  image: ${IMAGE:-ghcr.io/codebox-commits/git-rag-project}:${TAG:-main}
+  restart: unless-stopped
+  logging: *logging
+  networks: [internal, egress]
+  environment:
+    ENV: production
+    GEMINI_API_KEY: ${GEMINI_API_KEY:?set GEMINI_API_KEY in deploy/.env}
+    LLM_MODEL: ${LLM_MODEL:-gemini-3.5-flash-lite}
+    REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    QDRANT_HOST: qdrant
+    QDRANT_PORT: "6333"
+    NEO4J_URI: bolt://neo4j:7687
+    NEO4J_USER: neo4j
+    NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+    ALLOWED_ORIGINS: https://${DOMAIN}
+  depends_on:
+    redis: { condition: service_healthy }
+    qdrant: { condition: service_healthy }
+    neo4j: { condition: service_healthy }
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # TLS certificates: keep across restarts (Let's Encrypt rate limits)
+      - caddy_config:/config
+    networks: [edge]
+    mem_limit: 128m
+    depends_on:
+      api: { condition: service_healthy }
+
+  api:
+    <<: *app
+    networks: [edge, internal, egress]
+    mem_limit: 1g
+    healthcheck:
+      # The image has no curl; Python's stdlib is enough for a liveness probe.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    mem_limit: 1536m
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10 | grep -q pong"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+
+  redis:
+    image: redis/redis-stack-server:latest
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in deploy/.env}
+      # Password + append-only file so queued tasks and the search index survive restarts.
+      REDIS_ARGS: --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes: [redis_data:/data]
+    networks: [internal]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes: [qdrant_data:/qdrant/storage]
+    networks: [internal]
+    mem_limit: 1g
+    healthcheck:
+      # No curl/wget in the image; bash's /dev/tcp is enough to see the port is open.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5.18-community
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      # Not prefixed NEO4J_: the image turns every NEO4J_* variable into a config setting.
+      DB_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in deploy/.env}
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+      NEO4J_server_memory_pagecache_size: 512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks: [internal]
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$$DB_PASSWORD\" 'RETURN 1'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+networks:
+  edge: {} # Caddy <-> API
+  internal:
+    internal: true # databases: no host ports, no internet
+  egress: {} # API/worker -> internet (Gemini, git clone)
+
+volumes:
+  caddy_data:
+  caddy_config:
+  redis_data:
+  qdrant_data:
+  neo4j_data:
+  neo4j_logs:
