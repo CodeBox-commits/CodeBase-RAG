@@ -11,7 +11,9 @@ celery_app.conf.update(
     result_serializer="json",
     accept_content=["json"],
     task_acks_late=True,
-    task_reject_on_worker_lost=True,
+    # If a worker process dies mid-task (e.g. OOM-killed), mark the task FAILED instead of
+    # requeueing it: a deterministic crash would otherwise kill every worker that retries it.
+    task_reject_on_worker_lost=False,
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=10,
     task_soft_time_limit=600,

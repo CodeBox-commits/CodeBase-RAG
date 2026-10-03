@@ -30,7 +30,8 @@ services:
   worker:
     <<: *backend
     container_name: git_rag_worker
-    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
+    # Bounded concurrency (default is one process per CPU): each process holds the embedding model.
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
 
   redis:
     image: redis/redis-stack:latest

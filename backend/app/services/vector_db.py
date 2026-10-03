@@ -8,6 +8,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
 
+from app.services.embeddings import EmbeddingSettings
+
 logger = logging.getLogger(__name__)
 
 
@@ -15,8 +17,10 @@ class QdrantService:
     def __init__(self):
         self.host = os.getenv("QDRANT_HOST", "qdrant")
         self.port = int(os.getenv("QDRANT_PORT", 6333))
-        self.collection_name = os.getenv("QDRANT_COLLECTION", "code_snippets")
-        self.vector_size = int(os.getenv("VECTOR_SIZE", 768))
+        embedding = EmbeddingSettings.from_env()
+        # The collection is tied to the embedding model (see EmbeddingSettings.collection_name).
+        self.collection_name = os.getenv("QDRANT_COLLECTION") or embedding.collection_name
+        self.vector_size = embedding.dimensions
         self.client: QdrantClient | None = None
 
     def _require_client(self) -> QdrantClient:

@@ -16,7 +16,7 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.12"
-  NODE_VERSION: "24"
+  NODE_VERSION: "26" # keep in sync with the node image in backend/Dockerfile
 
 jobs:
   # ---------------------------------------------------------------------------

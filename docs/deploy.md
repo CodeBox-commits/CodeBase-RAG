@@ -21,6 +21,23 @@ tag v1.2.3 ────────────► Release: + tags 1.2.3, 1.2 an
   (Settings → Secrets and variables → Actions → Variables). Private repos on the
   free plan only get 500 MB of package storage.
 
+## Models and API keys
+
+| What | Where it runs | Needs |
+|---|---|---|
+| Embeddings (default) | Local: FastEmbed `BAAI/bge-small-en-v1.5`, 384-d, baked into the image | Nothing: free, offline |
+| Embeddings (optional) | Gemini `gemini-embedding-001`, 768-d (`EMBEDDING_PROVIDER=gemini`) | `GEMINI_API_KEY` |
+| Reranker | Local: FlashRank MiniLM-L-12, baked into the image | Nothing |
+| Answers (LLM) | Gemini `LLM_MODEL` | `GEMINI_API_KEY` |
+
+- Indexing never calls an LLM, so with local embeddings it needs no API key at all.
+- Each embedding model writes to its own Qdrant collection (`code_<model>_<dims>`):
+  switching provider/model requires re-indexing, and vectors from different models
+  can never be mixed.
+- The image sets `HF_HUB_OFFLINE=1`: models are never downloaded at runtime.
+- Memory: local embedding runs in small batches (`LOCAL_EMBED_BATCH_SIZE`, default
+  16). A cold index of `pallets/click` (765 symbols) peaked at ~870 MiB in the worker.
+
 ## Health endpoints
 
 | Endpoint | Meaning | Used by |

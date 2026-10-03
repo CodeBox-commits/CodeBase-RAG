@@ -9,13 +9,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
 
 from app.core.schemas import RetrievalStrategy
-from app.services.embeddings import build_embeddings
+from app.services.embeddings import EmbeddingSettings, build_embeddings
 from app.services.graph_db import graph_db
 from app.services.hybrid_search import hybrid_search
 from app.services.lexical_db import DEFAULT_FIELDS, LexicalDB
 from app.services.query_planner import QueryPlanner
 from app.services.reranker import CrossEncoderReranker
-from app.services.vector_db import vector_db
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,7 @@ class AgentConfig:
             raise RuntimeError("GEMINI_API_KEY is not set. The code agent cannot start without it.")
         return cls(
             llm_model=os.getenv("LLM_MODEL", "gemini-3.5-flash-lite"),
-            embedding_model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
+            embedding_model=EmbeddingSettings.from_env().model,
             api_key=api_key,
             vector_top_k=int(os.getenv("VECTOR_TOP_K", "8")),
             rerank_candidates=int(os.getenv("RERANK_CANDIDATES", "24")),
@@ -94,11 +93,7 @@ class CodeAgent:
             max_output_tokens=self.config.max_output_tokens,
         )
         self.query_planner = QueryPlanner(self.llm)
-        self.embeddings = build_embeddings(
-            api_key=self.config.api_key,
-            model=self.config.embedding_model,
-            dimensions=vector_db.vector_size,
-        )
+        self.embeddings = build_embeddings(EmbeddingSettings.from_env(), api_key=self.config.api_key)
         self.reranker = CrossEncoderReranker.from_env()
         self.workflow = self._build_workflow()
 

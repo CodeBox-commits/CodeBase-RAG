@@ -9,7 +9,13 @@ from app.core.call_resolver import resolve_relationships
 from app.core.parser import CodeParser
 from app.core.schemas import ExtractedChunk
 from app.core.urls import normalize_repo_url
-from app.services.embeddings import CachedEmbeddings, EmbeddingDimensionError, build_embeddings
+from app.services.embeddings import (
+    GEMINI,
+    CachedEmbeddings,
+    EmbeddingDimensionError,
+    EmbeddingSettings,
+    build_embeddings,
+)
 from app.services.graph_db import graph_db
 from app.services.lexical_db import lexical_db
 from app.services.vector_db import vector_db
@@ -69,20 +75,18 @@ def embed_chunks(
 def process_repository(self, repo_url: str):
     repo_url = normalize_repo_url(repo_url)
 
+    settings = EmbeddingSettings.from_env()
     api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        logger.error("GEMINI_API_KEY is not set.")
-        raise IngestionError("GEMINI_API_KEY is not set")
+    # Only the Gemini embedding provider needs a key; local embeddings are free and offline.
+    if settings.provider == GEMINI and not api_key:
+        logger.error("GEMINI_API_KEY is not set (required for EMBEDDING_PROVIDER=gemini).")
+        raise IngestionError("GEMINI_API_KEY is not set (required for EMBEDDING_PROVIDER=gemini)")
 
     graph_db.connect()
     lexical_db.connect()
 
     # The embedder validates every vector's dimension, so no probe embedding is needed here.
-    embedder = build_embeddings(
-        api_key=api_key,
-        model=os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001"),
-        dimensions=vector_db.vector_size,
-    )
+    embedder = build_embeddings(settings, api_key=api_key)
 
     try:
         vector_db.connect()
