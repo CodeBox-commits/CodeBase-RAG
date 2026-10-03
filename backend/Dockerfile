@@ -20,8 +20,11 @@ RUN python -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
 COPY backend/requirements.txt .
 RUN pip install -r requirements.txt
-# Bake the reranker model (~34 MB ONNX) so the first question doesn't download it.
+# Bake the models into the image so nothing is downloaded at runtime:
+# the reranker (~34 MB) and the local embedding model (~67 MB), both ONNX.
 RUN python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir='/opt/flashrank')"
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir='/opt/fastembed')" \
+    && chmod -R a+rX /opt/flashrank /opt/fastembed
 
 # --- Stage 3: runtime --------------------------------------------------------------
 # Only the finished virtualenv, the model and the app code: no compilers, no pip cache.
@@ -30,7 +33,9 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH \
-    RERANKER_CACHE_DIR=/opt/flashrank
+    RERANKER_CACHE_DIR=/opt/flashrank \
+    FASTEMBED_CACHE_DIR=/opt/fastembed \
+    HF_HUB_OFFLINE=1
 
 # git is needed at runtime to clone repositories. Non-root user with a fixed UID.
 RUN apt-get update \
@@ -41,6 +46,7 @@ RUN apt-get update \
 
 COPY --from=deps /opt/venv /opt/venv
 COPY --from=deps /opt/flashrank /opt/flashrank
+COPY --from=deps /opt/fastembed /opt/fastembed
 
 WORKDIR /app
 # Code stays owned by root: the app user can read and run it but not modify it.
