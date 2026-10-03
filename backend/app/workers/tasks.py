@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.core.call_resolver import resolve_relationships
-from app.core.parser import CodeParser
+from app.core.languages import discover_source_files
 from app.core.schemas import ExtractedChunk
 from app.core.urls import normalize_repo_url
 from app.services.embeddings import (
@@ -121,11 +121,8 @@ def process_repository(self, repo_url: str):
             logger.error(f"Git clone failed: {e.stderr}")
             raise IngestionError("Invalid repository or access denied") from e
 
-        source_files = [
-            f for f in repo_path.rglob("*.py") if not (".venv" in f.parts or ".git" in f.parts or "tests" in f.parts)
-        ]
+        source_files = list(discover_source_files(repo_path))
 
-        parser = CodeParser()
         parsed_files: list[ParsedFile] = []
         failed_files_count = 0
 
@@ -133,7 +130,7 @@ def process_repository(self, repo_url: str):
             self.update_state(
                 state="PARSING",
                 meta={
-                    "step": "Parsing the AST",
+                    "step": "Parsing source files",
                     "files_total": len(source_files),
                     "files_done": done,
                     "chunks": sum(len(c) for _, c in parsed_files),
@@ -141,14 +138,14 @@ def process_repository(self, repo_url: str):
             )
 
         parse_progress(0)
-        for index, file_path in enumerate(source_files, 1):
+        for index, (file_path, language) in enumerate(source_files, 1):
             if index % 10 == 0:
                 parse_progress(index)
 
             try:
                 content = file_path.read_text(encoding="utf-8")
                 relative_path = str(file_path.relative_to(repo_path))
-                chunks = parser.parse_python_source(relative_path, content)
+                chunks = language.parse(relative_path, content)
             except Exception as e:
                 logger.warning(f"AST Parsing failed for {file_path.name}: {e!s}")
                 failed_files_count += 1
@@ -199,7 +196,7 @@ def process_repository(self, repo_url: str):
                         "name": chunk.qualified_name,
                         "text": chunk.source_code,
                         "type": chunk.type,
-                        "language": "python",
+                        "language": chunk.language,
                         "start_line": chunk.start_line,
                         "end_line": chunk.end_line,
                         "vector": vector,
@@ -219,8 +216,8 @@ def process_repository(self, repo_url: str):
 
         if parsed_files_count == 0:
             if failed_files_count > 0:
-                raise IngestionError(f"All {failed_files_count} Python files failed to ingest")
-            raise IngestionError("No Python source files found in repository")
+                raise IngestionError(f"All {failed_files_count} source files failed to ingest")
+            raise IngestionError("No supported source files found in repository")
 
         self.update_state(
             state="LINKING", meta={"step": "Resolving calls and inheritance", "symbols": len(ingested_chunks)}
@@ -230,7 +227,7 @@ def process_repository(self, repo_url: str):
         graph_db.merge_relationships(repo_url, relationships)
 
         logger.info(
-            f"Ingestion complete. Parsed {parsed_files_count} Python files. Failed {failed_files_count}. "
+            f"Ingestion complete. Parsed {parsed_files_count} source files. Failed {failed_files_count}. "
             f"Edges: {len(relationships.calls)} calls, {len(relationships.inherits)} inherits, "
             f"{len(relationships.has_method)} has_method."
         )

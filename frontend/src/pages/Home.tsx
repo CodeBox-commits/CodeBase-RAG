@@ -53,7 +53,7 @@ export default function Home() {
         <div className="hero-copy">
           <h1><span>Ask your codebase.</span> <span>Get answers with file and line.</span></h1>
           <p className="hero-sub">
-            Point it at a Python repository. It splits the code at every function and class, maps
+            Point it at a Python, JavaScript or TypeScript repository. It splits the code at every function and class, maps
             who calls whom, and answers questions with citations you can open.
           </p>
           <div className="hero-actions">

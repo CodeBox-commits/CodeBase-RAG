@@ -1,7 +1,8 @@
-# backend/app/core/parser.py
 import ast
+from pathlib import PurePosixPath
 from typing import Literal
 
+from app.core.languages.base import Language
 from app.core.schemas import ExtractedChunk
 
 _DEFINITION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -52,6 +53,7 @@ class RepositoryASTVisitor(ast.NodeVisitor):
 
         self.chunks.append(
             ExtractedChunk(
+                language="python",
                 name=node.name,
                 qualified_name=self._qualify(node.name),
                 type="class",
@@ -111,6 +113,7 @@ class RepositoryASTVisitor(ast.NodeVisitor):
         chunk_type: Literal["method", "function"] = "method" if is_method else "function"
 
         chunk = ExtractedChunk(
+            language="python",
             name=node.name,
             qualified_name=self._qualify(node.name),
             type=chunk_type,
@@ -128,19 +131,24 @@ class RepositoryASTVisitor(ast.NodeVisitor):
         self._scope.pop()
 
 
-class CodeParser:
-    @staticmethod
-    def parse_python_source(file_path: str, source_text: str) -> list[ExtractedChunk]:
-        if not source_text.strip():
+class PythonLanguage(Language):
+    name = "python"
+    extensions = (".py",)
+    self_names = ("self", "cls")
+    package_stems = ("__init__",)
+
+    def should_skip(self, path: PurePosixPath) -> bool:
+        return path.name.startswith("test_") or path.name.endswith("_test.py")
+
+    def parse(self, file_path: str, source: str) -> list[ExtractedChunk]:
+        if not source.strip():
             return []
 
         try:
-            syntax_tree = ast.parse(source_text)
+            syntax_tree = ast.parse(source)
         except (SyntaxError, ValueError):
             return []
 
-        source_lines = source_text.splitlines()
-        visitor = RepositoryASTVisitor(file_path, source_lines)
+        visitor = RepositoryASTVisitor(file_path, source.splitlines())
         visitor.visit(syntax_tree)
-
         return visitor.chunks

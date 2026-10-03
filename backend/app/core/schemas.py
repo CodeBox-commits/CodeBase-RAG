@@ -14,6 +14,7 @@ class ExtractedChunk(BaseModel):
         default="function", description="The structural type of the asset"
     )
     file_path: str = Field(..., description="The relative filesystem path inside the git repository")
+    language: str = Field(default="python", description="Name of the Language that parsed this chunk")
     start_line: int = Field(..., ge=1, description="The 1-indexed line number where the signature begins")
     end_line: int = Field(..., ge=1, description="The 1-indexed line number where the block ends")
     docstring: str | None = Field(None, description="Extracted documentation block, if any")

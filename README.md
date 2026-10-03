@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/CodeBox-commits/git-rag-project/actions/workflows/ci.yml/badge.svg)](https://github.com/CodeBox-commits/git-rag-project/actions/workflows/ci.yml)
 
-Ask questions about any Python repository and get answers that cite the file and line
+Ask questions about any Python, JavaScript or TypeScript repository and get answers that cite the file and line
 they came from.
 
 Codebase RAG splits a repository at every function, class and method, links them into a
@@ -19,7 +19,7 @@ who calls what.
 
 This project indexes code the way you read it:
 
-- **One chunk per symbol.** Python's `ast` module splits each file at exact function,
+- **One chunk per symbol.** Python's `ast` module (and tree-sitter for JS/TS) splits each file at exact function,
   class and method boundaries, so every chunk is a complete unit with its qualified name
   (`InvoiceService.finalize`) and line range.
 - **A real call graph.** `self.validate()`, `module.fn()` and `Class()` are resolved to
@@ -65,7 +65,7 @@ This project indexes code the way you read it:
 | API | FastAPI, Server-Sent Events |
 | Background jobs | Celery with a Redis broker |
 | Agent | LangGraph, Gemini (`gemini-3.5-flash-lite` by default) |
-| Parsing | Python `ast` |
+| Parsing | Python `ast`; tree-sitter for JavaScript and TypeScript |
 | Embeddings | FastEmbed `bge-small-en-v1.5`, local and free (Gemini embeddings optional) |
 | Reranking | FlashRank cross-encoder, local, CPU-only |
 | Stores | Neo4j 5 (graph), Qdrant (vectors), Redis Stack / RediSearch (BM25 and cache) |
@@ -160,7 +160,7 @@ validation and secret scanning.
 backend/
   app/
     api/            FastAPI routes: repo, chat, health
-    core/           AST parser, call resolver, schemas
+    core/           languages/ (one parser per language), call resolver, schemas
     services/       agent, embeddings, hybrid search, reranker, Neo4j, Qdrant, RediSearch
     workers/        Celery app and the indexing task
   tests/            unit tests, plus integration/ for the full pipeline
@@ -181,6 +181,8 @@ backups and restore.
 
 ## Limitations
 
-- Python only; other languages aren't parsed yet.
+- Python, JavaScript and TypeScript only. Adding a language is one `Language` subclass
+  in `backend/app/core/languages/` plus one line in its registry.
+- JS/TS object-literal methods (`{ foo() {} }`) and imports aliased with `as` aren't linked yet.
 - Public repositories only (cloned without credentials).
 - Calls resolved through dynamic dispatch or external libraries aren't linked in the graph.

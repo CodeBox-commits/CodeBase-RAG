@@ -1,8 +1,8 @@
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
 
+from app.core.languages import get_language
 from app.core.schemas import ExtractedChunk
 
 # (filepath, qualified_name) uniquely identifies a symbol within a repository.
@@ -27,8 +27,7 @@ def _parent_name(chunk: ExtractedChunk) -> str | None:
 
 
 def _module_name(chunk: ExtractedChunk) -> str:
-    path = PurePosixPath(chunk.file_path)
-    return path.parent.name if path.stem == "__init__" else path.stem
+    return get_language(chunk.language).module_name(chunk.file_path)
 
 
 class _SymbolIndex:
@@ -40,7 +39,7 @@ class _SymbolIndex:
             self.by_name[chunk.name].append(chunk)
 
     def enclosing_class(self, chunk: ExtractedChunk) -> str | None:
-        """Qualified name of the nearest class around `chunk` (what `self` refers to)."""
+        """Qualified name of the nearest class around `chunk` (what `self`/`this` refers to)."""
         parts = chunk.qualified_name.split(".")[:-1]
         while parts:
             candidate = self.by_key.get((chunk.file_path, ".".join(parts)))
@@ -57,14 +56,15 @@ class _SymbolIndex:
         """
         parts = ref.split(".")
         name = parts[-1]
-        candidates = [c for c in self.by_name.get(name, []) if c.type in kinds]
+        # Calls never cross languages (a JS frontend doesn't call the Python backend directly).
+        candidates = [c for c in self.by_name.get(name, []) if c.type in kinds and c.language == source.language]
         if not candidates:
             return None
 
         if len(parts) == 1:
             # A bare name can't refer to a method.
             pool = [c for c in candidates if c.type != "method"]
-        elif parts[0] in ("self", "cls") and len(parts) == 2:
+        elif parts[0] in get_language(source.language).self_names and len(parts) == 2:
             owner = self.enclosing_class(source)
             if owner:
                 own_key = (source.file_path, f"{owner}.{name}")
