@@ -6,7 +6,7 @@ import { repoName, useRepos, type Repo } from '../state'
 const STAGE_COPY: Record<string, string> = {
   CLONING: 'Shallow-cloning the repository into a temporary workspace.',
   PARSING: 'Walking every Python file and splitting it at class, method and function boundaries.',
-  EMBEDDING: 'Turning each chunk into a 768-dimensional vector, in cached batches.',
+  EMBEDDING: 'Turning each chunk into a vector, in cached batches.',
   STORING: 'Writing symbols to Neo4j, vectors to Qdrant and text to RediSearch.',
   LINKING: 'Resolving calls, inheritance and class membership into graph edges.',
 }
@@ -40,13 +40,13 @@ function StageDetail({ repo, index }: { repo: Repo; index: number }) {
   const p = repo.progress ?? {}
   const key = INGEST_STAGES[index].key
   if (key === 'PARSING' && p.files_total) {
-    return <Meter label={`${p.files_done ?? 0} / ${p.files_total} files · ${p.chunks ?? 0} chunks`} value={pct(p.files_done, p.files_total)} />
+    return <Meter label={`${p.files_done ?? 0} of ${p.files_total} files, ${p.chunks ?? 0} chunks`} value={pct(p.files_done, p.files_total)} />
   }
   if (key === 'EMBEDDING' && p.chunks_total) {
-    return <Meter label={`${p.chunks_done ?? 0} / ${p.chunks_total} chunks embedded`} value={pct(p.chunks_done, p.chunks_total)} />
+    return <Meter label={`${p.chunks_done ?? 0} of ${p.chunks_total} chunks embedded`} value={pct(p.chunks_done, p.chunks_total)} />
   }
   if (key === 'STORING' && p.store_total) {
-    return <Meter label={`${p.store_done ?? 0} / ${p.store_total} files written`} value={pct(p.store_done, p.store_total)} />
+    return <Meter label={`${p.store_done ?? 0} of ${p.store_total} files written`} value={pct(p.store_done, p.store_total)} />
   }
   return <Meter label={repo.progress?.step ?? 'Working…'} indeterminate />
 }
@@ -87,8 +87,8 @@ export default function IndexPage() {
       <section className="ingest-hero">
         <IngestScene stage={current} className="ingest-canvas" />
         <div className="ingest-hero-copy rise">
-          <span className="kicker">Ingestion</span>
-          <h1>Turn a repository into a <span className="gradient-text">searchable graph</span></h1>
+          <h1>Index a repository</h1>
+          <p className="ingest-sub">Paste a public GitHub URL. Indexing clones it, splits the Python code into symbols, embeds them and links the calls.</p>
           <form
             className="url-form"
             onSubmit={(e) => {
@@ -110,17 +110,14 @@ export default function IndexPage() {
             </button>
           </form>
           {error && <p className="form-error">{error}</p>}
-          <p className="muted small">Public Python repositories. Tests and virtualenvs are skipped.</p>
+          <p className="muted small">Test folders and virtualenvs are skipped.</p>
         </div>
       </section>
 
       <div className="index-grid">
         <section className="panel stage-panel">
           <header className="panel-head">
-            <div>
-              <span className="kicker">Pipeline</span>
-              <h2>{active ? repoName(active.url) : 'No repository yet'}</h2>
-            </div>
+            <h2>{active ? repoName(active.url) : 'No repository yet'}</h2>
             {active && (
               <span className={`status-pill ${active.state}`}>
                 <span className={`dot ${active.state}`} />
@@ -170,7 +167,7 @@ export default function IndexPage() {
                 <p className="warn small">{active.result.failed_files} files could not be ingested.</p>
               )}
               <div className="result-actions">
-                <button className="btn btn-primary" onClick={() => navigate('/explore')}>Explore the graph →</button>
+                <button className="btn btn-primary" onClick={() => navigate('/explore')}>Explore the city</button>
                 <button className="btn btn-ghost" onClick={() => navigate('/ask')}>Ask a question</button>
                 <button className="btn btn-ghost" onClick={() => submit(active.url)}>Re-index</button>
               </div>
@@ -179,7 +176,7 @@ export default function IndexPage() {
         </section>
 
         <aside className="panel repo-panel">
-          <header className="panel-head"><div><span className="kicker">Library</span><h2>Repositories</h2></div></header>
+          <header className="panel-head"><h2>Repositories</h2></header>
           {repos.length === 0 && <p className="muted small">Indexed repositories appear here.</p>}
           <ul className="repo-cards">
             {repos.map((r) => (
@@ -189,7 +186,7 @@ export default function IndexPage() {
                   <span className="repo-card-text">
                     <strong>{repoName(r.url)}</strong>
                     <span>
-                      {r.state === 'ready' && `${r.result?.symbols ?? '?'} symbols · ${r.result?.call_edges ?? '?'} edges`}
+                      {r.state === 'ready' && `${r.result?.symbols ?? '?'} symbols, ${r.result?.call_edges ?? '?'} calls`}
                       {r.state === 'indexing' && (INGEST_STAGES.find((s) => s.key === r.stage)?.label ?? 'Queued')}
                       {r.state === 'failed' && 'Failed'}
                     </span>

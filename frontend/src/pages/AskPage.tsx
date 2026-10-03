@@ -3,6 +3,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ask } from '../api'
 import PipelineInspector from '../components/PipelineInspector'
+import MiniCity from '../components/MiniCity'
 import { navigate } from '../router'
 import { repoName, useRepos, type Message } from '../state'
 
@@ -56,7 +57,7 @@ export default function AskPage() {
     return (
       <div className="page">
         <div className="empty-state rise">
-          <div className="empty-orb" aria-hidden />
+          <MiniCity />
           <h2>{!active ? 'Pick a repository first' : active.state === 'indexing' ? 'Still indexing…' : 'Indexing failed'}</h2>
           <p className="muted">Questions are answered from an indexed repository's code and call graph.</p>
           <button className="btn btn-primary" onClick={() => navigate('/index')}>Go to Index</button>
@@ -108,10 +109,7 @@ export default function AskPage() {
     <div className="page ask-page">
       <section className="panel chat-panel rise">
         <header className="panel-head">
-          <div>
-            <span className="kicker">Asking</span>
-            <h2>{repoName(repoUrl)}</h2>
-          </div>
+          <h2>{repoName(repoUrl)}</h2>
           {messages.length > 0 && (
             <button className="ghost small-btn" onClick={() => { updateChat(repoUrl, () => []); setSelectedId(null) }}>Clear</button>
           )}
@@ -120,7 +118,7 @@ export default function AskPage() {
         <div className="messages" ref={listRef}>
           {messages.length === 0 && (
             <div className="suggestions">
-              <p className="muted">Try asking</p>
+              <p className="muted">Some questions to start with</p>
               {SUGGESTIONS.map((s, i) => (
                 <button key={s} className="suggestion" style={{ animationDelay: `${i * 80}ms` }} onClick={() => send(s)}>{s}</button>
               ))}
@@ -168,10 +166,7 @@ export default function AskPage() {
 
       <aside className="panel inspector-panel rise" style={{ animationDelay: '120ms' }}>
         <header className="panel-head">
-          <div>
-            <span className="kicker">Pipeline inspector</span>
-            <h2>How this answer was built</h2>
-          </div>
+          <h2>How this answer was built</h2>
         </header>
         <PipelineInspector msg={selected} question={selectedQuestion} />
       </aside>

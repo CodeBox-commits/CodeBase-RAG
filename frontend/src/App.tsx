@@ -1,5 +1,4 @@
 import Nav from './components/Nav'
-import Starfield from './components/Starfield'
 import AskPage from './pages/AskPage'
 import ExplorePage from './pages/ExplorePage'
 import Home from './pages/Home'
@@ -11,7 +10,6 @@ export default function App() {
   const route = useRoute()
   return (
     <RepoProvider>
-      <Starfield />
       <Nav route={route} />
       {/* key: remount on navigation so each page's entrance animation replays */}
       <div key={route} className="route-view">

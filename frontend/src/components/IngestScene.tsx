@@ -2,11 +2,11 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
 export const INGEST_STAGES = [
-  { key: 'CLONING', label: 'Clone', color: 0x9aa4c7 },
-  { key: 'PARSING', label: 'Parse AST', color: 0xffc861 },
-  { key: 'EMBEDDING', label: 'Embed', color: 0x7c9cff },
-  { key: 'STORING', label: 'Store', color: 0xff8fa3 },
-  { key: 'LINKING', label: 'Link graph', color: 0x3ee6c1 },
+  { key: 'CLONING', label: 'Clone', color: 0xd2cbea },
+  { key: 'PARSING', label: 'Parse AST', color: 0xa3ee7f },
+  { key: 'EMBEDDING', label: 'Embed', color: 0x5fd6f2 },
+  { key: 'STORING', label: 'Store', color: 0xff7aa8 },
+  { key: 'LINKING', label: 'Link graph', color: 0xb18cff },
 ] as const
 
 /**
@@ -42,7 +42,7 @@ export default function IngestScene({ stage, className }: { stage: number; class
       new THREE.Vector3(-11, stationPos[0].y, stationPos[0].z), ...stationPos, new THREE.Vector3(11, stationPos[4].y, stationPos[4].z),
     ])
     const tubeGeo = track(new THREE.TubeGeometry(curve, 200, 0.025, 6, false))
-    const tubeMat = track(new THREE.MeshBasicMaterial({ color: 0x3a3d5c, transparent: true, opacity: 0.8 }))
+    const tubeMat = track(new THREE.MeshBasicMaterial({ color: 0x3a2f6e, transparent: true, opacity: 0.9 }))
     root.add(new THREE.Mesh(tubeGeo, tubeMat))
 
     // Where each station sits along the curve (0..1), for particle gating.
@@ -151,7 +151,7 @@ export default function IngestScene({ stage, className }: { stage: number; class
         // Particles take the colour of the last station they passed.
         let idx = 0
         stationT.forEach((st, k) => { if (pt.t >= st - 0.01) idx = k })
-        col.setHex(pt.t < stationT[0] - 0.01 ? 0xc9d4ff : INGEST_STAGES[idx].color)
+        col.setHex(pt.t < stationT[0] - 0.01 ? 0xeeeaf8 : INGEST_STAGES[idx].color)
         col.toArray(pCol, i * 3)
       })
       pGeo.attributes.position.needsUpdate = true
