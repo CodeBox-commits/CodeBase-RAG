@@ -122,7 +122,7 @@ class Neo4jService:
         MERGE (r:Repository {url: $url})
         ON CREATE SET r.created_at = timestamp(), r.last_indexed = timestamp()
         ON MATCH SET r.last_indexed = timestamp()
-        RETURN id(r)
+        RETURN elementId(r)
         """
         with self._require_driver().session() as session:
             session.execute_write(lambda tx: tx.run(query, url=repo_url).consume())
