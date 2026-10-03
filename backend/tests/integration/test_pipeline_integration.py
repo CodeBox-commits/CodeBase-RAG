@@ -87,7 +87,7 @@ def indexed_repo(tmp_path_factory):
 
     mp = pytest.MonkeyPatch()
     mp.setenv("GEMINI_API_KEY", "integration-test")
-    mp.setattr(tasks, "build_embeddings", lambda **kw: FakeEmbedder(vector_db.vector_size))
+    mp.setattr(tasks, "build_embeddings", lambda *a, **kw: FakeEmbedder(vector_db.vector_size))
     try:
         result = tasks.process_repository.apply(args=[repo_url]).get(disable_sync_subtasks=False)
         yield repo_url, result
