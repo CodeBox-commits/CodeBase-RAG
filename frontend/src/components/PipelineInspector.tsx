@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { GraphEdge, GraphNode, RetrievedHit, StepEvent, StepNode } from '../api'
 import type { Message } from '../state'
 import ForceGraph3D, { EDGE_COLORS, KIND_COLORS } from './ForceGraph3D'
+import MiniCity from './MiniCity'
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`
 
@@ -9,7 +10,7 @@ type UiStep = StepNode | 'generate'
 const STEPS: { node: UiStep; label: string; sub: string }[] = [
   { node: 'query_planner', label: 'Plan query', sub: 'LLM classifies intent, extracts symbols, writes search queries' },
   { node: 'retrieval_router', label: 'Route', sub: 'Chooses vector, hybrid or graph-heavy retrieval' },
-  { node: 'embed_queries', label: 'Embed queries', sub: 'Gemini embeddings · 768-d · Redis-cached' },
+  { node: 'embed_queries', label: 'Embed queries', sub: 'Turns each search query into a vector, cached in Redis' },
   { node: 'retrieve', label: 'Search & fuse', sub: 'Qdrant vector lists + RediSearch BM25 → Reciprocal Rank Fusion' },
   { node: 'rerank', label: 'Rerank', sub: 'Local cross-encoder (MiniLM-L-12) rescores each candidate against the question' },
   { node: 'graph_search', label: 'Traverse graph', sub: 'Neo4j: callers, callees (≤3 hops), classes, bases' },
@@ -319,7 +320,7 @@ export default function PipelineInspector({ msg, question }: { msg: Message | nu
   if (!msg) {
     return (
       <div className="inspector-empty">
-        <div className="empty-orb small" aria-hidden />
+        <MiniCity small />
         <p className="muted">Ask a question to watch the pipeline run step by step.</p>
       </div>
     )

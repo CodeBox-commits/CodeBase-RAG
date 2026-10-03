@@ -10,13 +10,13 @@ const LINKS: { to: Route; label: string }[] = [
 ]
 
 export function Logo() {
+  // Three towers on a plot: the code city mark.
   return (
     <span className="nav-logo" aria-hidden>
-      <svg viewBox="0 0 24 24" width="16" height="16">
-        <circle cx="6" cy="6" r="2.4" />
-        <circle cx="18" cy="8" r="2.4" />
-        <circle cx="10" cy="18" r="2.4" />
-        <path d="M6 6 L18 8 L10 18 Z" fill="none" strokeWidth="1.4" />
+      <svg viewBox="0 0 26 26" width="26" height="26">
+        <rect x="2" y="12" width="6" height="12" fill="var(--cyan)" />
+        <rect x="10" y="3" width="6" height="21" fill="var(--lit)" />
+        <rect x="18" y="9" width="6" height="15" fill="var(--rose)" />
       </svg>
     </span>
   )
@@ -41,9 +41,9 @@ export default function Nav({ route }: { route: Route }) {
 
   return (
     <nav className={`nav ${scrolled || route !== '/' ? 'scrolled' : ''}`}>
-      <a href="#/" className="nav-brand" onClick={(e) => { e.preventDefault(); go('/') }}>
+      <a href="#/" className="nav-brand" aria-label="Codebase RAG home" onClick={(e) => { e.preventDefault(); go('/') }}>
         <Logo />
-        Codebase<span className="accent">RAG</span>
+        <span className="nav-brand-text">Codebase RAG</span>
       </a>
 
       <div className={`nav-links ${open ? 'open' : ''}`}>
@@ -77,8 +77,8 @@ export default function Nav({ route }: { route: Route }) {
           </label>
         )}
         {route === '/' && (
-          <a href="#/index" className="btn btn-primary btn-sm" onClick={(e) => { e.preventDefault(); go('/index') }}>
-            Get started
+          <a href="#/index" className="btn btn-primary btn-sm nav-cta" onClick={(e) => { e.preventDefault(); go('/index') }}>
+            Index a repository
           </a>
         )}
         <button className="nav-burger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>

@@ -1,246 +1,156 @@
-import { useEffect, useState } from 'react'
-import GraphScene from '../components/GraphScene'
-import OrbitScene from '../components/OrbitScene'
-
-/** Adds `.in` to every `.reveal` element once it scrolls into view. */
-function useReveal() {
-  useEffect(() => {
-    const els = document.querySelectorAll('.reveal')
-    const io = new IntersectionObserver(
-      (entries) =>
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add('in')
-            io.unobserve(e.target)
-          }
-        }),
-      { threshold: 0.15 },
-    )
-    els.forEach((el) => io.observe(el))
-    return () => io.disconnect()
-  }, [])
-}
-
-const STEPS = [
-  {
-    n: '01',
-    title: 'Clone',
-    body: 'A Celery worker shallow-clones the repository out of band, so the UI never blocks.',
-    code: 'git clone --depth 1',
-  },
-  {
-    n: '02',
-    title: 'Parse the AST',
-    body: 'Every class, method and nested function becomes a chunk with a qualified name and exact line range.',
-    code: 'InvoiceService.finalize  L42–58',
-  },
-  {
-    n: '03',
-    title: 'Embed & index',
-    body: 'Chunks are embedded into Qdrant and indexed for BM25 in RediSearch, one repo at a time.',
-    code: '768-d · cosine · BM25STD',
-  },
-  {
-    n: '04',
-    title: 'Link the graph',
-    body: 'Calls, inheritance and membership are statically resolved into real Neo4j edges.',
-    code: '(:Method)-[:CALLS]->(:Function)',
-  },
-]
+import { useEffect, useMemo, useState } from 'react'
+import CodeCity from '../components/CodeCity'
+import { sampleCity } from '../sampleCity'
 
 const PIPELINE = [
-  { id: 'plan', label: 'Plan', desc: 'One LLM call classifies intent, extracts named symbols and writes retrieval-optimised queries.' },
-  { id: 'route', label: 'Route', desc: 'Chooses vector, hybrid or graph-heavy retrieval based on the question type.' },
-  { id: 'retrieve', label: 'Retrieve', desc: 'Multi-query vector search fused with BM25 via Reciprocal Rank Fusion: 24 candidates.' },
-  { id: 'rerank', label: 'Rerank', desc: 'A local cross-encoder reads the question with each candidate and keeps the 8 most relevant.' },
-  { id: 'traverse', label: 'Traverse', desc: 'Walks callers and callees up to three hops, plus class, base and method relations.' },
-  { id: 'answer', label: 'Answer', desc: 'Grounded generation that must cite path/to/file.py:line for every claim.' },
+  { id: 'plan', label: 'Plan', desc: 'One model call works out what kind of question it is, pulls out any symbol names and writes up to three search queries.' },
+  { id: 'route', label: 'Route', desc: 'Lookups go straight to search. Questions about call flow or dependencies also walk the graph.' },
+  { id: 'retrieve', label: 'Search', desc: 'Vector search for each query and BM25 keyword search run side by side, then merge by rank into 24 candidates.' },
+  { id: 'rerank', label: 'Rerank', desc: 'A small cross-encoder reads the question next to each candidate and keeps the 8 that answer it best.' },
+  { id: 'traverse', label: 'Traverse', desc: 'For the symbols found, Neo4j returns callers and callees up to three calls away, plus base classes and methods.' },
+  { id: 'answer', label: 'Answer', desc: 'The model sees only that code and those relationships, and cites a file and line for each claim.' },
 ]
 
 function Pipeline() {
   const [active, setActive] = useState(0)
   const [paused, setPaused] = useState(false)
   useEffect(() => {
-    if (paused) return
-    const id = setInterval(() => setActive((a) => (a + 1) % PIPELINE.length), 2200)
+    if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const id = setInterval(() => setActive((a) => (a + 1) % PIPELINE.length), 3200)
     return () => clearInterval(id)
   }, [paused])
 
   return (
-    <div className="pipeline reveal" onMouseLeave={() => setPaused(false)}>
-      <div className="pipeline-track">
-        <div className="pipeline-progress" style={{ width: `${(active / (PIPELINE.length - 1)) * 100}%` }} />
+    <div className="pipeline" onMouseLeave={() => setPaused(false)}>
+      <ol className="pipeline-steps">
         {PIPELINE.map((p, i) => (
-          <button
-            key={p.id}
-            className={`pipeline-node ${i === active ? 'active' : ''} ${i < active ? 'done' : ''}`}
-            onMouseEnter={() => {
-              setPaused(true)
-              setActive(i)
-            }}
-            onFocus={() => {
-              setPaused(true)
-              setActive(i)
-            }}
-          >
-            <span className="pipeline-dot" />
-            <span className="pipeline-label">{p.label}</span>
-          </button>
+          <li key={p.id}>
+            <button
+              className={`pipeline-step ${i === active ? 'active' : ''} ${i < active ? 'done' : ''}`}
+              aria-pressed={i === active}
+              onMouseEnter={() => { setPaused(true); setActive(i) }}
+              onFocus={() => { setPaused(true); setActive(i) }}
+              onClick={() => { setPaused(true); setActive(i) }}
+            >
+              <span className="pipeline-n">{i + 1}</span>
+              {p.label}
+            </button>
+          </li>
         ))}
-      </div>
-      <div className="pipeline-detail" key={active}>
-        <span className="mono accent">step {active + 1} / {PIPELINE.length}</span>
-        <h3>{PIPELINE[active].label}</h3>
-        <p>{PIPELINE[active].desc}</p>
-      </div>
+      </ol>
+      <p className="pipeline-detail" key={active} aria-live="polite">{PIPELINE[active].desc}</p>
     </div>
   )
 }
 
 export default function Home() {
-  useReveal()
+  const city = useMemo(() => sampleCity(), [])
 
   return (
     <>
-      <header id="top" className="hero">
-        <GraphScene className="hero-canvas" />
-        <div className="hero-vignette" />
-        <div className="hero-content">
-          <div className="eyebrow rise" style={{ animationDelay: '0ms' }}>
-            <span className="live-dot" /> AST · Knowledge graph · Hybrid search
-          </div>
-          <h1 className="rise" style={{ animationDelay: '90ms' }}>
-            Ask your codebase.<br />
-            <span className="gradient-text">Get answers with receipts.</span>
-          </h1>
-          <p className="hero-sub rise" style={{ animationDelay: '180ms' }}>
-            Point it at any Python repository. It parses every function and class, maps who calls whom,
-            and answers questions with file-and-line citations instead of guesses.
+      <header className="hero">
+        <CodeCity nodes={city.nodes} edges={city.edges} controls={false} tour offsetX={0.2} className="hero-city" />
+        <div className="hero-copy">
+          <h1><span>Ask your codebase.</span> <span>Get answers with file and line.</span></h1>
+          <p className="hero-sub">
+            Point it at a Python repository. It splits the code at every function and class, maps
+            who calls whom, and answers questions with citations you can open.
           </p>
-          <div className="hero-ctas rise" style={{ animationDelay: '270ms' }}>
-            <a href="#/index" className="btn btn-primary">Index a repository →</a>
-            <button className="btn btn-ghost" onClick={() => document.getElementById('how')?.scrollIntoView()}>See how it works</button>
+          <div className="hero-actions">
+            <a href="#/index" className="btn btn-primary">Index a repository</a>
+            <a href="#how" className="btn btn-quiet" onClick={(e) => { e.preventDefault(); document.getElementById('how')?.scrollIntoView() }}>
+              How a question is answered
+            </a>
           </div>
-          <dl className="hero-stats rise" style={{ animationDelay: '360ms' }}>
-            <div><dt>3</dt><dd>stores fused</dd></div>
-            <div><dt>3-hop</dt><dd>call traversal</dd></div>
-            <div><dt>RRF</dt><dd>rank fusion</dd></div>
-            <div><dt>file:line</dt><dd>citations</dd></div>
-          </dl>
         </div>
-        <button className="scroll-cue" aria-label="Scroll down" onClick={() => document.getElementById('how')?.scrollIntoView()}><span /></button>
+        <p className="hero-key">
+          A sample repository as a city: each tower is a <i className="k-fn">function</i>, <i className="k-m">method</i> or{' '}
+          <i className="k-cls">class</i>, as tall as its code is long, standing on its file. Lit arcs are calls.
+        </p>
       </header>
 
       <main>
-        <section id="how" className="section">
-          <div className="section-head reveal">
-            <span className="kicker">How it works</span>
-            <h2>From <span className="mono">git clone</span> to a queryable graph in four steps</h2>
+        <section className="section split" id="why">
+          <div className="rail">
+            <h2>Text splitters cut functions in half</h2>
+            <p className="lede">Most RAG pipelines chop source into fixed-size pieces. A function ends up split across two chunks, and neither one makes sense alone.</p>
           </div>
-          <ol className="steps-grid">
-            {STEPS.map((s, i) => (
-              <li key={s.n} className="step-card reveal" style={{ transitionDelay: `${i * 90}ms` }}>
-                <span className="step-n">{s.n}</span>
-                <h3>{s.title}</h3>
-                <p>{s.body}</p>
-                <code className="step-code">{s.code}</code>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section id="features" className="section">
-          <div className="section-head reveal">
-            <span className="kicker">Why not plain RAG</span>
-            <h2>Naive text splitting cuts functions in half. This doesn't.</h2>
-          </div>
-          <div className="bento">
-            <article className="bento-card span-2 reveal">
-              <h3>Structure-aware chunks</h3>
-              <p>Chunks follow the AST, not a character count. Same-named methods never collide.</p>
-              <pre className="code-demo">
-<span className="c-kw">class</span> <span className="c-cls">InvoiceService</span>(<span className="c-cls">BaseService</span>):{'\n'}
-{'    '}<span className="c-kw">def</span> <span className="c-fn">finalize</span>(self, invoice):   <span className="c-cm"># → InvoiceService.finalize</span>{'\n'}
-{'        '}self.validate(invoice){'\n'}
-{'        '}<span className="c-kw">def</span> <span className="c-fn">_total</span>():            <span className="c-cm"># → InvoiceService.finalize._total</span>{'\n'}
-{'            '}...
+          <div className="compare">
+            <figure className="compare-pane">
+              <figcaption>Fixed-size chunks</figcaption>
+              <pre className="code">
+<span className="c-kw">def</span> <span className="c-fn">finalize</span>(self, invoice):{'\n'}
+{'    '}self.validate(invoice){'\n'}
+{'    '}total = self._total(invoice)
+<span className="cut" role="presentation">chunk 14 ends at 500 characters</span>
+{'    '}<span className="c-kw">if</span> total &gt; invoice.limit:{'\n'}
+{'        '}<span className="c-kw">raise</span> <span className="c-cls">LimitExceeded</span>(total){'\n'}
+{'    '}<span className="c-kw">return</span> self.gateway.charge(total)
               </pre>
-            </article>
-            <article className="bento-card reveal">
-              <div className="bento-icon">⟳</div>
-              <h3>Resolved call graph</h3>
-              <p><span className="mono">self.x()</span>, <span className="mono">module.fn()</span> and <span className="mono">Class()</span> resolve to real definitions. Ambiguous or external calls are dropped rather than invented.</p>
-            </article>
-            <article className="bento-card reveal">
-              <div className="bento-icon">⌕</div>
-              <h3>Hybrid retrieval</h3>
-              <p>Several query embeddings plus BM25, merged with Reciprocal Rank Fusion. An exact symbol name always ranks first.</p>
-            </article>
-            <article className="bento-card span-2 reveal">
-              <h3>Grounded answers</h3>
-              <p>The model only sees retrieved code and graph facts, and must cite them.</p>
-              <div className="answer-demo">
-                <span className="demo-tag">example</span>
-                <p><span className="mono accent">InvoiceService</span> is defined in <code>billing/service.py:18</code> and extends <code>BaseService</code>.</p>
-                <p><span className="mono">finalize</span> calls <code>BaseService.validate</code> → <code>rules.check_totals</code> (2 hops) and is called by <code>api.checkout</code>.</p>
-              </div>
-            </article>
-            <article className="bento-card reveal">
-              <div className="bento-icon">◎</div>
-              <h3>Query understanding</h3>
-              <p>Questions are classified and rewritten first, so "what calls X" walks the graph while "where is X" looks up the symbol.</p>
-            </article>
-            <article className="bento-card reveal">
-              <div className="bento-icon">⇅</div>
-              <h3>Background ingestion</h3>
-              <p>Cloning, parsing and embedding run in a Celery worker, with live progress and failures that say why they failed.</p>
-            </article>
-            <article className="bento-card reveal">
-              <div className="bento-icon">▦</div>
-              <h3>Per-repo isolation</h3>
-              <p>Every store is keyed by a normalized repo URL, so <span className="mono">.git</span> and trailing slashes never split an index.</p>
-            </article>
+            </figure>
+            <figure className="compare-pane good">
+              <figcaption>One chunk per symbol</figcaption>
+              <pre className="code">
+<span className="c-cm"># InvoiceService.finalize{'\n'}# billing/service.py:42–48</span>{'\n'}
+<span className="c-kw">def</span> <span className="c-fn">finalize</span>(self, invoice):{'\n'}
+{'    '}self.validate(invoice){'\n'}
+{'    '}total = self._total(invoice){'\n'}
+{'    '}<span className="c-kw">if</span> total &gt; invoice.limit:{'\n'}
+{'        '}<span className="c-kw">raise</span> <span className="c-cls">LimitExceeded</span>(total){'\n'}
+{'    '}<span className="c-kw">return</span> self.gateway.charge(total)
+              </pre>
+            </figure>
           </div>
+          <dl className="facts">
+            <div>
+              <dt>Calls are resolved, not guessed</dt>
+              <dd><code>self.validate()</code> links to <code>BaseService.validate</code>. Calls it can't resolve are left out instead of invented.</dd>
+            </div>
+            <div>
+              <dt>Exact names still match</dt>
+              <dd>Keyword search runs next to vector search, so asking about <code>check_totals</code> finds <code>check_totals</code>.</dd>
+            </div>
+            <div>
+              <dt>Every claim has a source</dt>
+              <dd>Answers point to <code>path/to/file.py:line</code>, so you can check them in your editor.</dd>
+            </div>
+          </dl>
         </section>
 
-        <section id="pipeline" className="section">
-          <div className="section-head reveal">
-            <span className="kicker">Agent pipeline</span>
-            <h2>A LangGraph state machine behind every question</h2>
+        <section className="section split" id="how">
+          <div className="rail">
+            <h2>How a question is answered</h2>
+            <p className="lede">Six steps run for every question. On the Ask page you can open each one and see what it found.</p>
           </div>
           <Pipeline />
         </section>
 
-        <section id="stack" className="section stack">
-          <div className="stack-copy reveal">
-            <span className="kicker">Three stores, one answer</span>
-            <h2>Graph, vectors and keywords, orbiting a single query</h2>
-            <ul className="stack-list">
-              <li><span className="swatch" style={{ background: '#3ee6c1' }} /><div><strong>Neo4j</strong> holds symbols and their CALLS, INHERITS and HAS_METHOD edges.</div></li>
-              <li><span className="swatch" style={{ background: '#7c9cff' }} /><div><strong>Qdrant</strong> holds a 768-d embedding for every chunk, filtered per repository.</div></li>
-              <li><span className="swatch" style={{ background: '#ff8fa3' }} /><div><strong>RediSearch</strong> runs BM25 over symbols, paths and source text.</div></li>
-            </ul>
-            <p className="muted">Orchestrated by FastAPI, Celery and LangGraph, with Gemini for embeddings and generation.</p>
+        <section className="section split" id="stores">
+          <div className="rail">
+            <h2>Three indexes, one answer</h2>
+            <p className="lede">Indexing writes each repository to three stores, each keyed by its URL.</p>
           </div>
-          <OrbitScene className="orbit-canvas reveal" />
+          <dl className="stores">
+            <div><dt><i className="k-cls" />Neo4j</dt><dd>Symbols and the calls, inheritance and methods between them.</dd></div>
+            <div><dt><i className="k-m" />Qdrant</dt><dd>A vector for every chunk, for searching by meaning.</dd></div>
+            <div><dt><i className="k-fn" />RediSearch</dt><dd>BM25 over names, paths and source text, for exact matches.</dd></div>
+          </dl>
         </section>
 
-        <section className="section cta-section">
-          <div className="cta reveal">
-            <span className="kicker">Get started</span>
-            <h2>Index a repository, explore its graph, then ask anything</h2>
-            <div className="cta-cards">
-              <a href="#/index" className="cta-card"><span className="cta-n">01</span><strong>Index</strong><span>Watch it clone, parse, embed and link, live.</span></a>
-              <a href="#/explore" className="cta-card"><span className="cta-n">02</span><strong>Explore</strong><span>Fly through the call graph in 3D.</span></a>
-              <a href="#/ask" className="cta-card"><span className="cta-n">03</span><strong>Ask</strong><span>See every retrieval step as it happens.</span></a>
-            </div>
-          </div>
+        <section className="section closer">
+          <h2>Start with a repository you know well</h2>
+          <p className="lede">You'll be able to tell right away whether the answers are right.</p>
+          <nav className="closer-links" aria-label="Get started">
+            <a href="#/index"><strong>Index</strong><span>Paste a GitHub URL and watch each stage run.</span></a>
+            <a href="#/explore"><strong>Explore</strong><span>Walk the repository as a city or a call graph.</span></a>
+            <a href="#/ask"><strong>Ask</strong><span>Ask in plain English and inspect every step.</span></a>
+          </nav>
         </section>
       </main>
 
       <footer className="footer">
-        <span>Codebase<span className="accent">RAG</span></span>
-        <span className="muted">FastAPI · Celery · Neo4j · Qdrant · RediSearch · LangGraph · Gemini · three.js</span>
+        <span className="footer-brand">Codebase RAG</span>
+        <span className="muted">Built with FastAPI, Celery, LangGraph, Neo4j, Qdrant, RediSearch and three.js.</span>
       </footer>
     </>
   )

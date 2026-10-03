@@ -2,16 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { GraphEdge, GraphNode } from '../api'
 
-export const KIND_COLORS: Record<string, number> = {
-  class: 0xffc861,
-  method: 0x7c9cff,
-  function: 0x3ee6c1,
-}
-export const EDGE_COLORS: Record<string, number> = {
-  CALLS: 0x7c9cff,
-  INHERITS: 0xff8fa3,
-  HAS_METHOD: 0x6b6f8a,
-}
+import { EDGE_COLORS, KIND_COLORS } from '../palette'
+
+export { EDGE_COLORS, KIND_COLORS }
 
 interface Props {
   nodes: GraphNode[]
