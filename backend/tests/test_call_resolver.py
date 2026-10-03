@@ -1,5 +1,5 @@
 from app.core.call_resolver import resolve_relationships
-from app.core.parser import CodeParser
+from app.core.languages import parse_source
 
 FILES = {
     "app/utils.py": """
@@ -47,7 +47,7 @@ def run():
 def _relationships():
     chunks = []
     for path, source in FILES.items():
-        chunks.extend(CodeParser.parse_python_source(path, source))
+        chunks.extend(parse_source(path, source))
     return resolve_relationships(chunks)
 
 

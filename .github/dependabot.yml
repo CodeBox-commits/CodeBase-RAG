@@ -7,6 +7,10 @@ updates:
     groups:
       python-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # tree-sitter 0.26 segfaults with the published JS/TS grammar wheels; see requirements.txt.
+      - dependency-name: tree-sitter
+        versions: [">=0.26"]
   - package-ecosystem: npm
     directory: /frontend
     schedule: { interval: weekly }

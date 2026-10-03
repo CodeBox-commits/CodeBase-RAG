@@ -1,4 +1,4 @@
-from app.core.parser import CodeParser
+from app.core.languages import parse_source
 
 SOURCE = '''
 import os
@@ -40,7 +40,7 @@ def _by_qname(chunks):
 
 
 def test_same_named_methods_get_distinct_qualified_names():
-    chunks = _by_qname(CodeParser.parse_python_source("pkg/models.py", SOURCE))
+    chunks = _by_qname(parse_source("pkg/models.py", SOURCE))
 
     assert "Base.__init__" in chunks
     assert "Child.__init__" in chunks
@@ -49,7 +49,7 @@ def test_same_named_methods_get_distinct_qualified_names():
 
 
 def test_class_chunks_are_emitted_with_header_and_bases():
-    chunks = _by_qname(CodeParser.parse_python_source("pkg/models.py", SOURCE))
+    chunks = _by_qname(parse_source("pkg/models.py", SOURCE))
 
     base = chunks["Base"]
     assert base.type == "class"
@@ -64,7 +64,7 @@ def test_class_chunks_are_emitted_with_header_and_bases():
 
 
 def test_nested_function_in_method_is_a_function_not_a_method():
-    chunks = _by_qname(CodeParser.parse_python_source("pkg/models.py", SOURCE))
+    chunks = _by_qname(parse_source("pkg/models.py", SOURCE))
 
     assert chunks["Child.name"].type == "method"
     assert chunks["Child.name.helper"].type == "function"
@@ -72,7 +72,7 @@ def test_nested_function_in_method_is_a_function_not_a_method():
 
 
 def test_calls_include_decorators_and_attribute_chains_but_not_nested_bodies():
-    chunks = _by_qname(CodeParser.parse_python_source("pkg/models.py", SOURCE))
+    chunks = _by_qname(parse_source("pkg/models.py", SOURCE))
 
     assert "self.setup" in chunks["Base.__init__"].calls
     assert "property" in chunks["Child.name"].calls
@@ -84,5 +84,5 @@ def test_calls_include_decorators_and_attribute_chains_but_not_nested_bodies():
 
 
 def test_invalid_or_empty_source_yields_no_chunks():
-    assert CodeParser.parse_python_source("x.py", "") == []
-    assert CodeParser.parse_python_source("x.py", "def broken(:\n") == []
+    assert parse_source("x.py", "") == []
+    assert parse_source("x.py", "def broken(:\n") == []

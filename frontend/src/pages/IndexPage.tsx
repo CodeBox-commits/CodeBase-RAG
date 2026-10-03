@@ -5,7 +5,7 @@ import { repoName, useRepos, type Repo } from '../state'
 
 const STAGE_COPY: Record<string, string> = {
   CLONING: 'Shallow-cloning the repository into a temporary workspace.',
-  PARSING: 'Walking every Python file and splitting it at class, method and function boundaries.',
+  PARSING: 'Walking every Python, JavaScript and TypeScript file and splitting it at class, method and function boundaries.',
   EMBEDDING: 'Turning each chunk into a vector, in cached batches.',
   STORING: 'Writing symbols to Neo4j, vectors to Qdrant and text to RediSearch.',
   LINKING: 'Resolving calls, inheritance and class membership into graph edges.',
@@ -88,7 +88,7 @@ export default function IndexPage() {
         <IngestScene stage={current} className="ingest-canvas" />
         <div className="ingest-hero-copy rise">
           <h1>Index a repository</h1>
-          <p className="ingest-sub">Paste a public GitHub URL. Indexing clones it, splits the Python code into symbols, embeds them and links the calls.</p>
+          <p className="ingest-sub">Paste a public GitHub URL. Indexing clones it, splits the Python, JS and TS code into symbols, embeds them and links the calls.</p>
           <form
             className="url-form"
             onSubmit={(e) => {
