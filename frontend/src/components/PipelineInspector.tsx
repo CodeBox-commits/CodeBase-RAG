@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { GraphEdge, GraphNode, RetrievedHit, StepEvent, StepNode } from '../api'
+import type { ExpandedHit, GraphEdge, GraphNode, RetrievedHit, StepEvent, StepNode } from '../api'
 import type { Message } from '../state'
 import ForceGraph3D, { EDGE_COLORS, KIND_COLORS } from './ForceGraph3D'
 import MiniCity from './MiniCity'
@@ -13,23 +13,21 @@ const STEPS: { node: UiStep; label: string; sub: string }[] = [
   { node: 'embed_queries', label: 'Embed queries', sub: 'Turns each search query into a vector, cached in Redis' },
   { node: 'retrieve', label: 'Search & fuse', sub: 'Qdrant vector lists + RediSearch BM25 → Reciprocal Rank Fusion' },
   { node: 'rerank', label: 'Rerank', sub: 'Local cross-encoder (MiniLM-L-12) rescores each candidate against the question' },
-  { node: 'graph_search', label: 'Traverse graph', sub: 'Neo4j: callers, callees (≤3 hops), classes, bases' },
+  { node: 'graph_search', label: 'Traverse graph', sub: 'Neo4j: callers, callees, overrides; pulls in the code they point to' },
   { node: 'generate', label: 'Generate answer', sub: 'Grounded answer with file:line citations' },
 ]
 
-type StepState = 'pending' | 'active' | 'done' | 'skipped' | 'failed'
+type StepState = 'pending' | 'active' | 'done' | 'failed'
 
 function stepStates(msg: Message): Record<UiStep, StepState> {
   const trace = msg.trace ?? []
   const seen = new Map(trace.map((e) => [e.node, e]))
-  const strategy = seen.get('retrieval_router')?.data.strategy
   const out = {} as Record<UiStep, StepState>
   let activeGiven = false
   STEPS.forEach(({ node }) => {
     let s: StepState
     if (node === 'generate') s = !msg.pending && msg.content ? (msg.error ? 'failed' : 'done') : 'pending'
     else if (seen.has(node)) s = 'done'
-    else if (node === 'graph_search' && strategy === 'vector' && seen.has('retrieve')) s = 'skipped'
     else if (!msg.pending && msg.error) s = 'failed'
     else s = 'pending'
     if (s === 'pending' && msg.pending && !activeGiven) {
@@ -89,8 +87,8 @@ function RoutePanel({ strategy }: { strategy: string }) {
         })}
       </svg>
       <p className="muted small">
-        {strategy === 'vector' && 'Symbol or implementation question: semantic search plus exact symbol lookup, no graph walk.'}
-        {strategy === 'hybrid' && 'Relationship or architecture question: full BM25 + vectors, then graph traversal.'}
+        {strategy === 'vector' && 'Symbol or implementation question: semantic search plus exact symbol lookup, then a 1-hop graph walk.'}
+        {strategy === 'hybrid' && 'Relationship or architecture question: full BM25 + vectors, then a 3-hop graph walk.'}
         {strategy === 'graph' && 'Call-flow question: retrieval anchors a deep walk of the call graph.'}
       </p>
     </div>
@@ -283,17 +281,41 @@ function GraphPanel({ data }: { data: Record<string, any> }) { // eslint-disable
   const [mode, setMode] = useState<'tree' | '3d'>('tree')
   const nodes: GraphNode[] = data.nodes ?? []
   const edges: GraphEdge[] = data.edges ?? []
-  if (!nodes.length) return <div className="step-panel"><span className="muted small">No structural relationships found for these symbols.</span></div>
+  const expanded: ExpandedHit[] = data.expanded ?? []
+  if (!nodes.length && !expanded.length) return <div className="step-panel"><span className="muted small">No structural relationships found for these symbols.</span></div>
   return (
     <div className="step-panel">
-      <div className="panel-toolbar">
-        <span className="muted small">{nodes.length} symbols · {edges.length} relationships</span>
-        <div className="seg">
-          <button className={mode === 'tree' ? 'on' : ''} onClick={() => setMode('tree')}>Tree</button>
-          <button className={mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>3D</button>
+      {nodes.length > 0 && (
+        <>
+          <div className="panel-toolbar">
+            <span className="muted small">
+              {nodes.length} symbols · {edges.length} relationships{data.depth ? ` · ${data.depth} hop${data.depth > 1 ? 's' : ''}` : ''}
+            </span>
+            <div className="seg">
+              <button className={mode === 'tree' ? 'on' : ''} onClick={() => setMode('tree')}>Tree</button>
+              <button className={mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>3D</button>
+            </div>
+          </div>
+          {mode === 'tree' ? <CallTree nodes={nodes} edges={edges} /> : <ForceGraph3D nodes={nodes} edges={edges} className="mini-graph" />}
+        </>
+      )}
+      {expanded.length > 0 && (
+        <div className="kv col">
+          <span>Code pulled in via the graph</span>
+          <ol className="ranked">
+            {expanded.map((r, i) => (
+              <li key={`${r.filepath}:${r.symbol}:${r.start_line}`} style={{ animationDelay: `${i * 70}ms` }}>
+                <span className="rank">+</span>
+                <div className="ranked-body">
+                  <div className="ranked-top"><span className="ranked-sym">{r.symbol}</span></div>
+                  <div className="ranked-loc mono">{r.filepath}:{r.start_line}</div>
+                  <div className="score-meta">{r.reason}</div>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
-      </div>
-      {mode === 'tree' ? <CallTree nodes={nodes} edges={edges} /> : <ForceGraph3D nodes={nodes} edges={edges} className="mini-graph" />}
+      )}
     </div>
   )
 }
@@ -328,7 +350,7 @@ export default function PipelineInspector({ msg, question }: { msg: Message | nu
   const states = stepStates(msg)
   const events = new Map((msg.trace ?? []).map((e) => [e.node, e]))
   const errors = (msg.trace ?? []).at(-1)?.errors ?? []
-  const doneCount = STEPS.filter((s) => states[s.node] === 'done' || states[s.node] === 'skipped').length
+  const doneCount = STEPS.filter((s) => states[s.node] === 'done').length
 
   return (
     <div className="inspector">
@@ -340,7 +362,7 @@ export default function PipelineInspector({ msg, question }: { msg: Message | nu
           const open = st === 'done' && !collapsed.has(s.node)
           return (
             <li key={s.node} className={`pipe-step ${st}`}>
-              <div className="pipe-rail" aria-hidden><span className="pipe-node">{st === 'done' ? '✓' : st === 'skipped' ? '–' : st === 'failed' ? '!' : i + 1}</span></div>
+              <div className="pipe-rail" aria-hidden><span className="pipe-node">{st === 'done' ? '✓' : st === 'failed' ? '!' : i + 1}</span></div>
               <div className="pipe-content">
                 <button
                   className="pipe-head"

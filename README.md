@@ -52,10 +52,12 @@ This project indexes code the way you read it:
 **Every question** runs through a LangGraph state machine:
 
 1. **Plan:** one Gemini call classifies the question, pulls out symbol names and writes up to three search queries.
-2. **Route:** lookups use search only; call-flow, dependency and architecture questions also use the graph.
+2. **Route:** lookups walk the graph 1 hop; call-flow, dependency and architecture questions walk 3 hops and use full BM25.
 3. **Search:** vector search (top 20 per query) and BM25 (top 20) are merged with Reciprocal Rank Fusion (k = 60) into 24 candidates.
 4. **Rerank:** a local cross-encoder (FlashRank `ms-marco-MiniLM-L-12-v2`) keeps the 8 best, blending 0.75 reranker score with 0.25 retrieval score.
-5. **Traverse:** Neo4j returns callers and callees up to 3 hops away, plus base classes and methods.
+5. **Traverse:** Neo4j returns callers, callees, base classes, methods and overrides (same-named methods up and down
+   the class hierarchy). The code of up to 6 related symbols the search missed is pulled in too: symbols named in the
+   question, overrides of retrieved methods, and direct callees of the top hits.
 6. **Answer:** Gemini writes the answer from that context only, with file-and-line citations. Tokens stream to the UI as Server-Sent Events.
 
 ## Tech stack
@@ -107,6 +109,7 @@ Set these in `backend/.env` (see [`backend/.env.example`](backend/.env.example))
 | `VECTOR_TOP_K` | `8` | Chunks kept after reranking |
 | `RERANK_CANDIDATES` | `24` | Candidates passed to the reranker |
 | `GRAPH_MAX_DEPTH` | `3` | How many calls away graph traversal goes |
+| `GRAPH_EXPAND_LIMIT` | `6` | How many related symbols' code the graph step adds to the answer context |
 | `RERANKER_MODEL` | `ms-marco-MiniLM-L-12-v2` | Set to `off` to skip reranking |
 
 Each embedding model writes to its own Qdrant collection, so switching provider or model
@@ -120,6 +123,9 @@ means re-indexing.
 | `GET` | `/api/v1/repo/status/{task_id}` | Stage, progress and result of an indexing task |
 | `GET` | `/api/v1/repo/graph?repo_url=…&limit=…` | Symbols and edges for the Explore page |
 | `POST` | `/api/v1/chat/` | Ask a question; set `"stream": true` for Server-Sent Events |
+| `GET` | `/api/v1/symbols/definitions?repo_url=…&name=…` | Every symbol with that name: location, class, bases, overrides, direct calls and callers |
+| `GET` | `/api/v1/symbols/callers?repo_url=…&name=…&depth=1-5` | Who calls this symbol, up to `depth` hops back |
+| `GET` | `/api/v1/symbols/callees?repo_url=…&name=…&depth=1-5` | What this symbol calls, up to `depth` hops forward |
 | `GET` | `/health` | Liveness: the process is up |
 | `GET` | `/ready` | Readiness: Neo4j, Qdrant and Redis respond |
 

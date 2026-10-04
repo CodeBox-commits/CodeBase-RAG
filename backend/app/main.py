@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api.health import router as health_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.repo import router as repo_router
+from app.api.v1.symbols import router as symbols_router
 from app.services.graph_db import graph_db
 from app.services.vector_db import vector_db
 
@@ -100,6 +101,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(repo_router, prefix="/api/v1/repo", tags=["Repository Ingestion"])
 app.include_router(chat_router, prefix="/api/v1/chat", tags=["Agent Query Engine"])
+app.include_router(symbols_router, prefix="/api/v1/symbols", tags=["Code Intelligence"])
 
 
 @app.exception_handler(Exception)

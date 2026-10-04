@@ -12,7 +12,7 @@ from app.core.schemas import RetrievalStrategy
 from app.services.embeddings import EmbeddingSettings, build_embeddings
 from app.services.graph_db import graph_db
 from app.services.hybrid_search import hybrid_search
-from app.services.lexical_db import DEFAULT_FIELDS, LexicalDB
+from app.services.lexical_db import DEFAULT_FIELDS, LexicalDB, lexical_db
 from app.services.query_planner import QueryPlanner
 from app.services.reranker import CrossEncoderReranker
 
@@ -39,7 +39,11 @@ class AgentConfig:
     snippet_max_lines: int = 60
     graph_anchor_limit: int = 15
     graph_max_depth: int = 3
+    # Symbol/implementation questions ("vector" strategy) only need the immediate neighbourhood.
+    graph_shallow_depth: int = 1
     graph_fanout: int = 10
+    # Code pulled in through the graph (overrides, named symbols, direct callees) on top of the hits.
+    graph_expand_limit: int = 6
     max_output_tokens: int = 2048
     # The Google SDK already retries 429/503 with backoff; retrying again here only burns quota.
     llm_retries: int = 0
@@ -62,6 +66,7 @@ class AgentConfig:
             graph_anchor_limit=int(os.getenv("GRAPH_ANCHOR_LIMIT", "15")),
             graph_max_depth=int(os.getenv("GRAPH_MAX_DEPTH", "3")),
             graph_fanout=int(os.getenv("GRAPH_FANOUT", "10")),
+            graph_expand_limit=int(os.getenv("GRAPH_EXPAND_LIMIT", "6")),
             max_output_tokens=int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "2048")),
         )
 
@@ -76,6 +81,8 @@ class AgentState(TypedDict):
     symbols: list[str]
     vector_results: list[dict[str, Any]]
     graph_results: list[dict[str, Any]]
+    # Code of related symbols the graph found but search didn't return, each with a "reason".
+    expanded_results: list[dict[str, Any]]
     rerank_info: dict[str, Any]
     retrieval_strategy: RetrievalStrategy
     errors: list[str]
@@ -118,30 +125,13 @@ class CodeAgent:
         graph.add_edge("retrieval_router", "embed_queries")
         graph.add_edge("embed_queries", "retrieve")
         graph.add_edge("retrieve", "rerank")
-
-        graph.add_conditional_edges(
-            "rerank",
-            self.route_after_retrieval,
-            {
-                "graph_search": "graph_search",
-                "generate_response": "generate_response",
-            },
-        )
+        # The graph step always runs: even a "where is X" question needs X's overrides and
+        # direct callees. The strategy only decides how deep it walks.
+        graph.add_edge("rerank", "graph_search")
         graph.add_edge("graph_search", "generate_response")
         graph.add_edge("generate_response", END)
 
         return graph.compile()
-
-    @staticmethod
-    def route_after_retrieval(
-        state: AgentState,
-    ) -> str:
-        strategy = state["retrieval_strategy"]
-
-        if strategy == "vector":
-            return "generate_response"
-
-        return "graph_search"
 
     def node_query_planner(self, state: AgentState) -> dict[str, Any]:
         errors = list(state.get("errors", []))
@@ -296,8 +286,9 @@ class CodeAgent:
         names = sorted(set(state.get("symbols", [])))
 
         if not anchors and not names:
-            return {"graph_results": [], "errors": errors}
+            return {"graph_results": [], "expanded_results": [], "errors": errors}
 
+        shallow = state.get("retrieval_strategy") == "vector"
         graph_context: list[dict[str, Any]] = []
         try:
             graph_db.connect()
@@ -305,7 +296,7 @@ class CodeAgent:
                 repo_url=state["repo_url"],
                 anchors=anchors,
                 names=names,
-                max_depth=self.config.graph_max_depth,
+                max_depth=self.config.graph_shallow_depth if shallow else self.config.graph_max_depth,
                 anchor_limit=self.config.graph_anchor_limit,
                 fanout=self.config.graph_fanout,
             )
@@ -313,15 +304,76 @@ class CodeAgent:
             logger.error(f"Graph search node failed: {e}", exc_info=True)
             errors.append(f"graph_search_failed: {e}")
 
-        return {"graph_results": graph_context, "errors": errors}
+        expanded: list[dict[str, Any]] = []
+        refs = self.expansion_refs(
+            state.get("vector_results", []), graph_context, names, self.config.graph_expand_limit
+        )
+        if refs:
+            try:
+                reasons = {(r["filepath"], r["symbol"]): r["reason"] for r in refs}
+                for hit in lexical_db.get_chunks(state["repo_url"], refs):
+                    expanded.append(
+                        {**hit, "sources": ["graph"], "reason": reasons.get((hit["filepath"], hit["symbol"]), "")}
+                    )
+            except Exception as e:
+                logger.error(f"Fetching graph-related code failed: {e}", exc_info=True)
+                errors.append(f"graph_expansion_failed: {e}")
+
+        return {"graph_results": graph_context, "expanded_results": expanded, "errors": errors}
+
+    @staticmethod
+    def expansion_refs(
+        hits: list[dict[str, Any]],
+        graph_rows: list[dict[str, Any]],
+        names: list[str],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Related symbols whose code should be shown although search didn't return it.
+
+        In priority order:
+        1. symbols named in the question (search may rank them below the cut-off),
+        2. overrides of retrieved methods, both ways: calling a base method can run a
+           subclass's version, and a subclass method often defers to its base,
+        3. direct callees of the top three hits, where the next step of the logic usually is.
+        """
+        seen = {(h.get("filepath"), h.get("symbol")) for h in hits}
+        wanted = {n.lower() for n in names}
+        top = [(h.get("filepath"), h.get("symbol")) for h in hits[:3]]
+        refs: list[dict[str, Any]] = []
+
+        def add(symbol: str | None, filepath: str | None, line: int | None, reason: str) -> None:
+            key = (filepath, symbol)
+            if not symbol or not filepath or line is None or key in seen:
+                return
+            seen.add(key)
+            refs.append({"filepath": filepath, "symbol": symbol, "start_line": line, "reason": reason})
+
+        for row in graph_rows:
+            name = row.get("name") or ""
+            if name.lower() in wanted or name.rsplit(".", 1)[-1].lower() in wanted:
+                add(name, row.get("filepath"), row.get("start_line"), "named in the question")
+        for row in graph_rows:
+            for item in row.get("overridden_by") or []:
+                add(item.get("name"), item.get("filepath"), item.get("line"), f"overrides {row.get('name')}")
+            for item in row.get("overrides") or []:
+                add(item.get("name"), item.get("filepath"), item.get("line"), f"overridden by {row.get('name')}")
+        for row in graph_rows:
+            if (row.get("filepath"), row.get("name")) not in top:
+                continue
+            for item in row.get("calls") or []:
+                if (item.get("hops") or 1) == 1:
+                    add(item.get("name"), item.get("filepath"), item.get("line"), f"called by {row.get('name')}")
+        return refs[:limit]
 
     def node_generate_response(self, state: AgentState) -> dict[str, Any]:
         question = state["question"]
         vector_results = state.get("vector_results", [])
         graph_results = state.get("graph_results", [])
+        expanded_results = state.get("expanded_results", [])
         errors = state.get("errors", [])
 
         code_snippets = self._format_code_snippets(vector_results, self.config.snippet_max_lines)
+        related_snippets = self._format_code_snippets(expanded_results, self.config.snippet_max_lines)
         graph_metadata = self._format_graph_context(graph_results)
 
         system_prompt = (
@@ -338,7 +390,9 @@ class CodeAgent:
             "search terms) would help, instead of guessing.\n"
             "3. When describing relationships (calls, inheritance, imports), use the structural "
             "graph context rather than inferring it from the snippet text alone.\n"
-            "4. Prefer concise, technically precise answers over padded explanations. Use "
+            "4. When a method is overridden in a subclass, check which version actually runs for "
+            "the object in question; the override's behaviour usually decides the answer.\n"
+            "5. Prefer concise, technically precise answers over padded explanations. Use "
             "bullet points or short code blocks where they aid clarity."
         )
 
@@ -353,6 +407,7 @@ class CodeAgent:
         user_content = (
             f"User Question: {question}\n\n"
             f"--- Code Snippets (Vector Search) ---\n{code_snippets or 'No direct matches found.'}\n\n"
+            f"--- Related Code (pulled in via the graph) ---\n{related_snippets or 'None.'}\n\n"
             f"--- Structural Graph Context ---\n{graph_metadata or 'No graph relationships retrieved.'}"
             f"{context_note}\n\n"
             "Answer the question using the rules above."
@@ -374,8 +429,12 @@ class CodeAgent:
                 f"Symbol: {v.get('symbol', 'unknown')}\n"
                 f"Language: {v.get('language', 'unknown')}\n"
                 f"Chunk Type: {v.get('chunk_type', 'unknown')}\n"
-                f"Relevance Score: {v.get('score', 0):.3f} (via {', '.join(v.get('sources', [])) or 'unknown'})\n"
-                f"Code:\n```\n{code}\n```"
+                + (
+                    f"Why included: {v['reason']}\n"
+                    if v.get("reason")
+                    else f"Relevance Score: {v.get('score', 0):.3f} (via {', '.join(v.get('sources', [])) or 'unknown'})\n"
+                )
+                + f"Code:\n```\n{code}\n```"
             )
 
         return "\n\n".join(blocks)
@@ -444,6 +503,9 @@ class CodeAgent:
                 values = [v for v in (g.get(key) or []) if v]
                 if values:
                     line += f" | {title}: {', '.join(values)}"
+            for key, title in (("overrides", "Overrides"), ("overridden_by", "Overridden by")):
+                if g.get(key):
+                    line += f" | {title}: {fmt_neighbours(g[key])}"
             if g.get("calls"):
                 line += f" | Calls: {fmt_neighbours(g['calls'])}"
             if g.get("called_by"):
@@ -490,6 +552,7 @@ class CodeAgent:
             "query_embeddings": [],
             "vector_results": [],
             "graph_results": [],
+            "expanded_results": [],
             "rerank_info": {},
             "retrieval_strategy": "vector",
             "errors": [],
@@ -581,6 +644,15 @@ class CodeAgent:
             }
         elif node == "graph_search":
             data = self._graph_payload(state.get("graph_results", []))
+            data["depth"] = (
+                self.config.graph_shallow_depth
+                if state.get("retrieval_strategy") == "vector"
+                else self.config.graph_max_depth
+            )
+            data["expanded"] = [
+                {k: r.get(k) for k in ("symbol", "filepath", "start_line", "end_line", "chunk_type", "reason")}
+                for r in state.get("expanded_results", [])
+            ]
         return {"type": "step", "node": node, "data": data, "errors": list(state.get("errors", []))}
 
     @staticmethod
@@ -625,6 +697,12 @@ class CodeAgent:
             for method in row.get("methods") or []:
                 if add(method, "method"):
                     edges.append({"source": center, "target": method, "type": "HAS_METHOD", "hops": 1})
+            for item in row.get("overridden_by") or []:
+                if add(item.get("name"), "method", item.get("filepath")):
+                    edges.append({"source": item["name"], "target": center, "type": "OVERRIDES", "hops": 1})
+            for item in row.get("overrides") or []:
+                if add(item.get("name"), "method", item.get("filepath")):
+                    edges.append({"source": center, "target": item["name"], "type": "OVERRIDES", "hops": 1})
 
         unique = {(e["source"], e["target"], e["type"]): e for e in edges}
         return {"nodes": list(nodes.values()), "edges": list(unique.values())}

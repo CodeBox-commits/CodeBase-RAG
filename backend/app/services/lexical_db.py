@@ -240,6 +240,35 @@ class LexicalDB:
         ]
         return self.rank_exact_symbols_first(hits, terms)
 
+    def get_chunks(self, repo_url: str, refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Stored chunks by identity ({"filepath", "symbol", "start_line"}), in `refs` order.
+
+        Lets the graph step pull in the code of symbols that search didn't return.
+        Refs with no stored chunk are skipped.
+        """
+        if not refs:
+            return []
+        pipe = self._require_client().pipeline(transaction=False)
+        for ref in refs:
+            pipe.hgetall(self._make_key(repo_url, ref["filepath"], ref["symbol"], int(ref["start_line"])))
+        hits = []
+        for doc in pipe.execute():
+            if not doc:
+                continue
+            hits.append(
+                {
+                    "repo_url": doc["repo_url"],
+                    "filepath": doc["filepath"],
+                    "symbol": doc["symbol"],
+                    "language": doc.get("language"),
+                    "chunk_type": doc.get("chunk_type"),
+                    "start_line": int(doc["start_line"]),
+                    "end_line": int(doc["end_line"]),
+                    "code_text": doc.get("code_text", ""),
+                }
+            )
+        return hits
+
     @staticmethod
     def rank_exact_symbols_first(hits: list[dict[str, Any]], terms: list[str]) -> list[dict[str, Any]]:
         # BM25 length normalisation favours short chunks, so a class with a long docstring

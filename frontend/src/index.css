@@ -433,7 +433,6 @@ code, .mono { font-family: var(--mono); font-size: 0.88em; }
 .mini-pipe { display: flex; gap: 3px; margin-bottom: 10px; max-width: 260px; }
 .mini-pipe span { flex: 1; height: 3px; background: var(--rule); transition: background 0.3s; }
 .mini-pipe span.done { background: var(--lit); }
-.mini-pipe span.skipped { background: var(--fog); opacity: 0.4; }
 .mini-pipe span.active { background: var(--lit); animation: blink 0.9s infinite; }
 .md { line-height: 1.65; }
 .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
@@ -462,7 +461,6 @@ code, .mono { font-family: var(--mono); font-size: 0.88em; }
   border: 1.5px solid var(--rule); background: var(--ink); color: var(--fog); transition: all 0.3s; }
 .pipe-step.done .pipe-node { background: var(--lit); border-color: var(--lit); color: var(--lit-ink); font-weight: 700; }
 .pipe-step.active .pipe-node { border-color: var(--lit); color: var(--paper); box-shadow: 0 0 0 4px var(--lit-soft); }
-.pipe-step.skipped { opacity: 0.45; }
 .pipe-step.failed .pipe-node { border-color: var(--err); color: var(--err); }
 .pipe-content { flex: 1; min-width: 0; padding-bottom: 18px; }
 .pipe-head { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; background: none; border: 0; padding: 3px 0 0; text-align: left; }
