@@ -35,7 +35,8 @@ This project indexes code the way you read it:
 | Page | What it does |
 |---|---|
 | **Index** | Paste a public GitHub URL and watch it clone, parse, embed, store and link, with live progress for each stage. |
-| **Explore** | Walk the repository as a **code city**: each tower is a function, method or class, as tall as its code is long, standing on its file's plot. Click one to light up its calls. You can switch to a force-directed graph view, filter by file or search by name. |
+| **Explore** | Walk the repository as a **code city**: each tower is a function, method or class, as tall as its code is long, standing on its file's plot. Click one to light up its calls, or ask **"What breaks if this changes?"** to light up its whole blast radius (callers, subclasses and overrides, up to 3 hops) with a per-file list. You can switch to a force-directed graph view, filter by file or search by name. |
+| **MCP** | Coding agents (Claude Code, Cursor and others) use the same code intelligence as tools: see [MCP server](#mcp-server). |
 | **Ask** | Ask in plain English. The answer streams in next to a pipeline inspector, where you can open each step and see the plan, the search queries, the ranked hits, the reranker's reordering and the call tree. |
 
 ## Architecture
@@ -53,6 +54,7 @@ This project indexes code the way you read it:
 
 1. **Plan:** one Gemini call classifies the question, pulls out symbol names and writes up to three search queries.
 2. **Route:** lookups walk the graph 1 hop; call-flow, dependency and architecture questions walk 3 hops and use full BM25.
+   "What breaks if I change X?" questions also get X's exact blast radius from the graph.
 3. **Search:** vector search (top 20 per query) and BM25 (top 20) are merged with Reciprocal Rank Fusion (k = 60) into 24 candidates.
 4. **Rerank:** a local cross-encoder (FlashRank `ms-marco-MiniLM-L-12-v2`) keeps the 8 best, blending 0.75 reranker score with 0.25 retrieval score.
 5. **Traverse:** Neo4j returns callers, callees, base classes, methods and overrides (same-named methods up and down
@@ -111,6 +113,8 @@ Set these in `backend/.env` (see [`backend/.env.example`](backend/.env.example))
 | `GRAPH_MAX_DEPTH` | `3` | How many calls away graph traversal goes |
 | `GRAPH_EXPAND_LIMIT` | `6` | How many related symbols' code the graph step adds to the answer context |
 | `RERANKER_MODEL` | `ms-marco-MiniLM-L-12-v2` | Set to `off` to skip reranking |
+| `MCP_TOKEN` | (unset) | Bearer token required on `/mcp`; unset means no auth, fine on localhost only |
+| `MCP_ALLOWED_HOSTS` | `localhost:*,127.0.0.1:*,[::1]:*` | `Host` headers the MCP endpoint answers |
 
 Each embedding model writes to its own Qdrant collection, so switching provider or model
 means re-indexing.
@@ -121,15 +125,47 @@ means re-indexing.
 |---|---|---|
 | `POST` | `/api/v1/repo/index` | Start indexing a repository; returns a task ID |
 | `GET` | `/api/v1/repo/status/{task_id}` | Stage, progress and result of an indexing task |
+| `GET` | `/api/v1/repo/list` | Every indexed repository with its symbol count |
 | `GET` | `/api/v1/repo/graph?repo_url=…&limit=…` | Symbols and edges for the Explore page |
 | `POST` | `/api/v1/chat/` | Ask a question; set `"stream": true` for Server-Sent Events |
 | `GET` | `/api/v1/symbols/definitions?repo_url=…&name=…` | Every symbol with that name: location, class, bases, overrides, direct calls and callers |
 | `GET` | `/api/v1/symbols/callers?repo_url=…&name=…&depth=1-5` | Who calls this symbol, up to `depth` hops back |
 | `GET` | `/api/v1/symbols/callees?repo_url=…&name=…&depth=1-5` | What this symbol calls, up to `depth` hops forward |
+| `GET` | `/api/v1/symbols/impact?repo_url=…&name=…&depth=1-5` | Blast radius: everything that calls, subclasses or overrides it, grouped by file |
+| `POST` | `/mcp` | MCP server (streamable HTTP) |
 | `GET` | `/health` | Liveness: the process is up |
 | `GET` | `/ready` | Readiness: Neo4j, Qdrant and Redis respond |
 
 Interactive docs are at <http://localhost:8000/docs>.
+
+## MCP server
+
+The code intelligence is also an [MCP](https://modelcontextprotocol.io) server at `/mcp`,
+so a coding agent can look things up in an indexed repository while it works. Add it to
+Claude Code:
+
+```bash
+claude mcp add --transport http codebox http://localhost:8000/mcp
+```
+
+| Tool | What it returns |
+|---|---|
+| `list_repositories` | Indexed repositories (the `repo_url` every other tool takes) |
+| `search_code` | Hybrid vector + BM25 search, reranked, with each hit's code |
+| `find_definition` | Location, class, bases, subclasses, overrides, direct calls and callers |
+| `get_symbol_code` | A symbol's full source |
+| `find_callers` / `find_callees` | Call graph neighbours up to 5 hops away |
+| `impact_of` | Blast radius of changing a symbol, grouped by file |
+| `ask_codebase` | A cited answer from the full RAG pipeline (uses Gemini quota) |
+
+All tools except `ask_codebase` are exact graph or search lookups: no LLM calls, no quota.
+The server is stateless and returns plain JSON. It only answers requests whose `Host` is in
+`MCP_ALLOWED_HOSTS` (protection against DNS rebinding), and when `MCP_TOKEN` is set every call
+needs `Authorization: Bearer <token>`. The production stack requires a token:
+
+```bash
+claude mcp add --transport http codebox https://your.domain/mcp --header "Authorization: Bearer $MCP_TOKEN"
+```
 
 ## Development
 
@@ -165,9 +201,11 @@ validation and secret scanning.
 ```
 backend/
   app/
-    api/            FastAPI routes: repo, chat, health
+    api/            FastAPI routes: repo, chat, symbols (code intelligence), health
+    mcp_server.py   MCP tools over the same code-intelligence layer
     core/           languages/ (one parser per language), call resolver, schemas
-    services/       agent, embeddings, hybrid search, reranker, Neo4j, Qdrant, RediSearch
+    services/       code_intel (definitions, callers, impact, search), agent, embeddings,
+                    hybrid search, reranker, Neo4j, Qdrant, RediSearch
     workers/        Celery app and the indexing task
   tests/            unit tests, plus integration/ for the full pipeline
 frontend/
@@ -189,6 +227,7 @@ backups and restore.
 
 - Python, JavaScript and TypeScript only. Adding a language is one `Language` subclass
   in `backend/app/core/languages/` plus one line in its registry.
-- JS/TS object-literal methods (`{ foo() {} }`) and imports aliased with `as` aren't linked yet.
+- JS/TS object-literal methods (`{ foo() {} }`) and imports aliased with `as` aren't linked yet;
+  two object-literal methods with the same name in one function share a graph node.
 - Public repositories only (cloned without credentials).
 - Calls resolved through dynamic dispatch or external libraries aren't linked in the graph.

@@ -3,9 +3,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.v1 import symbols as symbols_module
 from app.main import app
 from app.services import agent as agent_module
+from app.services import code_intel
 from app.services.agent import AgentConfig, CodeAgent
 
 
@@ -157,7 +157,7 @@ def test_graph_step_runs_for_every_strategy(bare_agent):
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setattr(symbols_module.graph_db, "connect", lambda: None)
+    monkeypatch.setattr(code_intel.graph_db, "connect", lambda: None)
     return TestClient(app)
 
 
@@ -168,7 +168,7 @@ def test_callers_endpoint_passes_direction_depth_and_normalised_url(client, monk
         seen.update(repo_url=repo_url, name=name, direction=direction, **kw)
         return [{"name": name, "symbols": [], "total": 0}]
 
-    monkeypatch.setattr(symbols_module.graph_db, "get_call_neighbours", fake)
+    monkeypatch.setattr(code_intel.graph_db, "get_call_neighbours", fake)
     res = client.get(
         "/api/v1/symbols/callers",
         params={"repo_url": "https://github.com/a/b.git", "name": "Cart.checkout", "depth": 3},
@@ -186,8 +186,8 @@ def test_callers_endpoint_passes_direction_depth_and_normalised_url(client, monk
 
 
 def test_symbol_endpoints_404_on_unknown_and_validate_depth(client, monkeypatch):
-    monkeypatch.setattr(symbols_module.graph_db, "get_call_neighbours", lambda *a, **kw: [])
-    monkeypatch.setattr(symbols_module.graph_db, "get_symbol_context", lambda *a, **kw: [])
+    monkeypatch.setattr(code_intel.graph_db, "get_call_neighbours", lambda *a, **kw: [])
+    monkeypatch.setattr(code_intel.graph_db, "get_symbol_context", lambda *a, **kw: [])
     params = {"repo_url": "https://github.com/a/b", "name": "nope"}
     assert client.get("/api/v1/symbols/callees", params=params).status_code == 404
     assert client.get("/api/v1/symbols/definitions", params=params).status_code == 404
@@ -198,6 +198,6 @@ def test_symbol_endpoints_503_when_graph_is_down(client, monkeypatch):
     def down(*a, **kw):
         raise ConnectionError("neo4j down")
 
-    monkeypatch.setattr(symbols_module.graph_db, "get_symbol_context", down)
+    monkeypatch.setattr(code_intel.graph_db, "get_symbol_context", down)
     res = client.get("/api/v1/symbols/definitions", params={"repo_url": "https://github.com/a/b", "name": "x"})
     assert res.status_code == 503

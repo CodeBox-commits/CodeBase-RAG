@@ -282,7 +282,8 @@ function GraphPanel({ data }: { data: Record<string, any> }) { // eslint-disable
   const nodes: GraphNode[] = data.nodes ?? []
   const edges: GraphEdge[] = data.edges ?? []
   const expanded: ExpandedHit[] = data.expanded ?? []
-  if (!nodes.length && !expanded.length) return <div className="step-panel"><span className="muted small">No structural relationships found for these symbols.</span></div>
+  const impact: { name: string; total: number; truncated: boolean; depth: number; files: { filepath: string; count: number }[] }[] = data.impact ?? []
+  if (!nodes.length && !expanded.length && !impact.length) return <div className="step-panel"><span className="muted small">No structural relationships found for these symbols.</span></div>
   return (
     <div className="step-panel">
       {nodes.length > 0 && (
@@ -299,6 +300,16 @@ function GraphPanel({ data }: { data: Record<string, any> }) { // eslint-disable
           {mode === 'tree' ? <CallTree nodes={nodes} edges={edges} /> : <ForceGraph3D nodes={nodes} edges={edges} className="mini-graph" />}
         </>
       )}
+      {impact.map((r) => (
+        <div key={r.name} className="kv col">
+          <span>Impact of <b className="mono">{r.name}</b></span>
+          <p className="impact-sum">
+            <b>{r.total}{r.truncated ? '+' : ''}</b> symbols across <b>{r.files.length}</b> files
+            <span className="muted"> · up to {r.depth} hops</span>
+          </p>
+          <Chips items={r.files.slice(0, 6).map((f) => `${f.filepath} · ${f.count}`)} />
+        </div>
+      ))}
       {expanded.length > 0 && (
         <div className="kv col">
           <span>Code pulled in via the graph</span>

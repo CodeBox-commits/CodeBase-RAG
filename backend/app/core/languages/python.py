@@ -78,6 +78,11 @@ class RepositoryASTVisitor(ast.NodeVisitor):
         self._process_function(node)
 
     def _process_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef):
+        # `@overload` stubs are type-only signatures with no body; the implementation that
+        # follows them is the real definition. Indexing them would give one symbol N chunks.
+        if any(self._resolve_ast_name(d) in ("overload", "typing.overload", "t.overload") for d in node.decorator_list):
+            return
+
         start_line = node.lineno
         end_line = getattr(node, "end_lineno", start_line)
         raw_code_slice = self._slice(start_line, end_line)
@@ -136,6 +141,7 @@ class PythonLanguage(Language):
     extensions = (".py",)
     self_names = ("self", "cls")
     package_stems = ("__init__",)
+    constructor_names = ("__init__", "__new__")
 
     def should_skip(self, path: PurePosixPath) -> bool:
         return path.name.startswith("test_") or path.name.endswith("_test.py")

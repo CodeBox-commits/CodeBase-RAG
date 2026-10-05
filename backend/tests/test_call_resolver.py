@@ -84,3 +84,22 @@ def test_inheritance_and_membership_edges():
     assert (("app/models.py", "User"), ("app/models.py", "Base")) in rel.inherits
     assert (("app/models.py", "Base"), ("app/models.py", "Base.save")) in rel.has_method
     assert (("app/other.py", "Other"), ("app/other.py", "Other.save")) in rel.has_method
+
+
+def test_super_calls_reach_the_nearest_base_that_defines_the_method():
+    files = {
+        "app/base.py": "class Base:\n    def save(self):\n        pass\n\n    def __init__(self):\n        pass\n",
+        "app/user.py": (
+            "from app.base import Base\n\n"
+            "class User(Base):\n    def __init__(self):\n        super().__init__()\n\n"
+            "class Admin(User):\n    def save(self):\n        super().save()\n\n"
+            "def orphan():\n    super().save()\n"
+        ),
+    }
+    chunks = [c for path, src in files.items() for c in parse_source(path, src)]
+    rel = resolve_relationships(chunks)
+    assert (("app/user.py", "User.__init__"), ("app/base.py", "Base.__init__")) in rel.calls
+    # Admin -> User (no save) -> Base.save: two levels up
+    assert (("app/user.py", "Admin.save"), ("app/base.py", "Base.save")) in rel.calls
+    # super() outside a class resolves to nothing
+    assert [dst for src, dst in rel.calls if src == ("app/user.py", "orphan")] == []

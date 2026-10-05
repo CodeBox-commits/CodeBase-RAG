@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getRepoGraph, type GraphEdge, type GraphNode, type RepoGraph } from '../api'
+import { getImpact, getRepoGraph, type GraphEdge, type GraphNode, type ImpactReport, type RepoGraph } from '../api'
 import CodeCity from '../components/CodeCity'
 import FileTree from '../components/FileTree'
 import ForceGraph3D, { EDGE_COLORS, KIND_COLORS } from '../components/ForceGraph3D'
@@ -41,6 +41,42 @@ function Neighbours({ title, items, onPick }: { title: string; items: { node: Gr
   )
 }
 
+const nodeId = (filepath: string, name: string) => `${filepath}::${name}`
+
+function ImpactPanel({ report, visible, onPick }: { report: ImpactReport; visible: Set<string>; onPick: (id: string) => void }) {
+  const hidden = report.affected.filter((a) => !visible.has(nodeId(a.filepath, a.name))).length
+  if (!report.total) return <p className="muted small impact-none">Nothing in the indexed code depends on this symbol.</p>
+  return (
+    <div className="impact">
+      <h4 className="impact-head">Impact of <span className="mono">{report.name}</span></h4>
+      <p className="impact-sum">
+        <b>{report.total}{report.truncated ? '+' : ''}</b> symbols across <b>{report.files.length}</b> files could be affected
+        <span className="muted"> · up to {report.depth} hops</span>
+      </p>
+      {hidden > 0 && <p className="muted small">{hidden} of them aren't among the towers shown; raise “Top N” to see them.</p>}
+      {report.files.map((f) => (
+        <div key={f.filepath} className="impact-file">
+          <h4 className="mono">{f.filepath} <span className="muted">{f.count}</span></h4>
+          <ul>
+            {report.affected.filter((a) => a.filepath === f.filepath).map((a) => {
+              const id = nodeId(a.filepath, a.name)
+              return (
+                <li key={id}>
+                  <button onClick={() => onPick(id)} disabled={!visible.has(id)} title={`${a.relation} ${a.via.name}`}>
+                    <span className={`hop hop-${Math.min(a.hops, 3)}`}>{a.hops}</span>
+                    <span className="nb-name">{a.name}</span>
+                    <span className="nb-type">{a.relation}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function ExplorePage() {
   const { active } = useRepos()
   const [graph, setGraph] = useState<RepoGraph | null>(null)
@@ -50,6 +86,7 @@ export default function ExplorePage() {
   const [selected, setSelected] = useState<string | null>(null)
   const [file, setFile] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [impact, setImpact] = useState<{ id: string; report?: ImpactReport; error?: string } | null>(null)
   const [view, setView] = useState<'city' | 'graph'>(() => load('explore-view', 'city'))
   const switchView = (v: 'city' | 'graph') => {
     setView(v)
@@ -64,6 +101,7 @@ export default function ExplorePage() {
     setError('')
     setSelected(null)
     setFile(null)
+    setImpact(null)
     getRepoGraph(active.url, limit)
       .then((g) => { if (!cancelled) setGraph(g) })
       .catch((e) => { if (!cancelled) setError((e as Error).message) })
@@ -80,7 +118,14 @@ export default function ExplorePage() {
     [nodes],
   )
 
+  const impactIds = useMemo(() => {
+    if (!impact?.report) return null
+    const r = impact.report
+    return new Set([...r.targets, ...r.affected].map((s) => nodeId(s.filepath, s.name)))
+  }, [impact])
+
   const highlight = useMemo(() => {
+    if (impactIds) return impactIds
     const q = query.trim().toLowerCase()
     if (!q && !file) return null
     return new Set(
@@ -88,7 +133,21 @@ export default function ExplorePage() {
         .filter((n) => (!file || n.filepath === file || n.filepath?.startsWith(file + '/')) && (!q || (n.name ?? '').toLowerCase().includes(q)))
         .map((n) => n.id),
     )
-  }, [query, file, nodes])
+  }, [query, file, nodes, impactIds])
+
+  const visibleIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes])
+  const pick = (id: string | null) => {
+    setSelected(id)
+    // Picking a symbol from the impact list keeps the analysis; anything else clears it.
+    if (!impact?.report || !id || !impactIds?.has(id)) setImpact(null)
+  }
+  const runImpact = (node: GraphNode) => {
+    if (!active) return
+    setImpact({ id: node.id })
+    getImpact(active.url, node.name ?? node.id, node.filepath)
+      .then((report) => setImpact((cur) => (cur?.id === node.id ? { id: node.id, report } : cur)))
+      .catch((e) => setImpact((cur) => (cur?.id === node.id ? { id: node.id, error: (e as Error).message } : cur)))
+  }
 
   const sel = selected ? byId.get(selected) : null
   const neighbours = useMemo(() => {
@@ -142,8 +201,8 @@ export default function ExplorePage() {
         {loading && <div className="stage-loading"><span className="spinner" /> Loading graph…</div>}
         {error && <div className="stage-loading error">{error}</div>}
         {!loading && !error && nodes.length > 0 && (view === 'city'
-          ? <CodeCity nodes={cityNodes} edges={edges} selected={selected} highlight={highlight} onSelect={setSelected} className="explore-graph" />
-          : <ForceGraph3D nodes={nodes} edges={edges} selected={selected} highlight={highlight} onSelect={setSelected} className="explore-graph" />
+          ? <CodeCity nodes={cityNodes} edges={edges} selected={selected} highlight={highlight} onSelect={pick} className="explore-graph" />
+          : <ForceGraph3D nodes={nodes} edges={edges} selected={selected} highlight={highlight} onSelect={pick} className="explore-graph" />
         )}
         <div className="view-switch seg" role="group" aria-label="View">
           <button className={view === 'city' ? 'on' : ''} aria-pressed={view === 'city'} onClick={() => switchView('city')}>City</button>
@@ -178,7 +237,7 @@ export default function ExplorePage() {
                 <span className="kind-tag" style={{ color: hex(KIND_COLORS[sel.kind] ?? 0xc9d4ff) }}>{sel.kind}</span>
                 <h2 className="break">{sel.name}</h2>
               </div>
-              <button className="icon" aria-label="Close" onClick={() => setSelected(null)}>×</button>
+              <button className="icon" aria-label="Close" onClick={() => pick(null)}>×</button>
             </header>
             <code className="loc">{sel.filepath}:{sel.start_line}–{sel.end_line}</code>
             <div className="mini-stats">
@@ -186,9 +245,24 @@ export default function ExplorePage() {
               <span><b>{neighbours.inc.length}</b> incoming</span>
               <span><b>{sel.degree ?? 0}</b> degree</span>
             </div>
-            <Neighbours title="Calls / contains" items={neighbours.out} onPick={setSelected} />
-            <Neighbours title="Called by / owned by" items={neighbours.inc} onPick={setSelected} />
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/ask')}>Ask about this symbol</button>
+            <div className="detail-actions">
+              <button
+                className={`btn btn-sm ${impact?.report ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => (impact?.report ? setImpact(null) : runImpact(sel))}
+                disabled={impact != null && !impact.report && !impact.error}
+              >
+                {impact && !impact.report && !impact.error ? 'Tracing…' : impact?.report ? 'Clear impact' : 'What breaks if this changes?'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate('/ask')}>Ask about this symbol</button>
+            </div>
+            {impact?.error && <p className="warn small">{impact.error}</p>}
+            {impact?.report && <ImpactPanel report={impact.report} visible={visibleIds} onPick={pick} />}
+            {!impact?.report && (
+              <>
+                <Neighbours title="Calls / contains" items={neighbours.out} onPick={pick} />
+                <Neighbours title="Called by / owned by" items={neighbours.inc} onPick={pick} />
+              </>
+            )}
           </>
         ) : (
           <div className="detail-empty">

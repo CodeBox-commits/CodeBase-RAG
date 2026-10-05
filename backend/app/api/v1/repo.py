@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, HttpUrl
 
 from app.core.urls import normalize_repo_url
+from app.services import code_intel
 from app.services.graph_db import graph_db
 from app.workers.celery_app import celery_app
 from app.workers.tasks import process_repository
@@ -48,6 +49,15 @@ async def get_task_status(task_id: str):
         response["error"] = str(task_result.info)
 
     return response
+
+
+@router.get("/list")
+async def list_repositories():
+    """Every indexed repository with its symbol count, newest first (shared by all clients)."""
+    try:
+        return {"repositories": code_intel.list_repositories()}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Graph database unavailable: {e}") from e
 
 
 @router.get("/graph")

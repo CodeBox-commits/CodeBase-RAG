@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from app.services import code_intel
 from app.services.graph_db import graph_db
 from app.services.hybrid_search import hybrid_search
 from app.services.lexical_db import lexical_db
@@ -159,6 +160,35 @@ def test_stored_chunks_can_be_fetched_by_identity(indexed_repo):
     [chunk] = lexical_db.get_chunks(repo_url, refs)
     assert chunk["symbol"] == "GiftCart.checkout"
     assert "percent + 5" in chunk["code_text"]
+
+
+def test_impact_follows_callers_subclasses_and_overrides(indexed_repo):
+    repo_url, _ = indexed_repo
+    report = code_intel.impact(repo_url, "round_money", depth=5)
+    assert [(a["name"], a["hops"], a["relation"]) for a in report["affected"]] == [
+        ("apply_discount", 1, "calls"),
+        ("Cart.checkout", 2, "calls"),
+        ("GiftCart.checkout", 3, "calls"),  # via super().checkout(...)
+    ]
+    assert [f["filepath"] for f in report["files"]] == ["shop/pricing.py", "shop/cart.py"]
+
+    # GiftCart.checkout both overrides and super()-calls Cart.checkout: reported once, as the override.
+    overrides = code_intel.impact(repo_url, "Cart.checkout", depth=1)
+    assert [(a["name"], a["relation"]) for a in overrides["affected"]] == [("GiftCart.checkout", "overrides")]
+
+    # Changing the constructor affects the subclass, which inherits it.
+    constructor = code_intel.impact(repo_url, "Cart.__init__", depth=1)
+    assert [(a["name"], a["relation"]) for a in constructor["affected"]] == [("GiftCart", "subclasses")]
+
+    subclasses = code_intel.impact(repo_url, "Cart", depth=1)
+    assert [(a["name"], a["relation"]) for a in subclasses["affected"]] == [("GiftCart", "subclasses")]
+    assert code_intel.impact(repo_url, "nope") is None
+
+
+def test_indexed_repository_is_listed(indexed_repo):
+    repo_url, result = indexed_repo
+    [row] = [r for r in code_intel.list_repositories() if r["url"] == repo_url]
+    assert row["symbols"] == result["symbols"]
 
 
 def test_repository_graph_endpoint_data(indexed_repo):
