@@ -21,6 +21,7 @@ export const EDGE_COLORS: Record<string, number> = {
   CALLS: 0xb18cff,
   INHERITS: 0xff7aa8,
   HAS_METHOD: 0x4a3c8c,
+  OVERRIDES: 0xffc66d, // amber: only in the Ask graph, derived from INHERITS + same-named methods
 }
 
 export const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`

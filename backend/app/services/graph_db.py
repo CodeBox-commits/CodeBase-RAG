@@ -72,8 +72,33 @@ RETURN
     head([(o:Class)-[:HAS_METHOD]->(n) | o.qualified_name])             AS owner,
     [(n)-[:INHERITS]->(b:Class) | b.qualified_name]                    AS bases,
     [(s:Class)-[:INHERITS]->(n) | s.qualified_name][..$fanout]         AS subclasses,
-    [(n)-[:HAS_METHOD]->(meth) | meth.qualified_name][..$fanout]       AS methods
+    [(n)-[:HAS_METHOD]->(meth) | meth.qualified_name][..$fanout]       AS methods,
+    // Same-named methods up and down the class hierarchy: a call to the base method
+    // may run a subclass override at runtime, which the CALLS edges alone never show.
+    [(n)<-[:HAS_METHOD]-(:Class)-[:INHERITS*1..5]->(:Class)-[:HAS_METHOD]->(m)
+        WHERE m.name = n.name | {name: m.qualified_name, filepath: m.filepath, line: m.start_line}] AS overrides,
+    [(n)<-[:HAS_METHOD]-(:Class)<-[:INHERITS*1..5]-(:Class)-[:HAS_METHOD]->(m)
+        WHERE m.name = n.name | {name: m.qualified_name, filepath: m.filepath, line: m.start_line}][..$fanout]
+        AS overridden_by
 """
+
+# Direction is spliced in as a fixed arrow, depth as an int; neither comes from user text.
+_NEIGHBOURS_QUERY = """
+MATCH (n:Symbol {repo_url: $repo_url})
+WHERE (n.qualified_name = $name OR ($bare AND n.name = $name))
+  AND ($filepath IS NULL OR n.filepath = $filepath)
+WITH n ORDER BY n.filepath, n.qualified_name
+LIMIT $match_limit
+OPTIONAL MATCH p = (n)__PATTERN__(m:Symbol)
+WITH n, m, min(length(p)) AS hops
+ORDER BY hops, m.filepath, m.qualified_name
+WITH n, collect(CASE WHEN m IS NULL THEN NULL ELSE
+    {name: m.qualified_name, filepath: m.filepath, line: m.start_line, type: m.type, hops: hops} END) AS found
+RETURN n.qualified_name AS name, n.filepath AS filepath, n.start_line AS start_line,
+       n.end_line AS end_line, n.type AS type, found[..$limit] AS symbols, size(found) AS total
+"""
+
+_NEIGHBOUR_PATTERNS = {"callees": "-[:CALLS*1..__DEPTH__]->", "callers": "<-[:CALLS*1..__DEPTH__]-"}
 
 
 class Neo4jService:
@@ -227,6 +252,37 @@ class Neo4jService:
                 names=names,
                 anchor_limit=anchor_limit,
                 fanout=fanout,
+            )
+            return [record.data() for record in result]
+
+    def get_call_neighbours(
+        self,
+        repo_url: str,
+        name: str,
+        direction: str,
+        depth: int = 1,
+        filepath: str | None = None,
+        limit: int = 200,
+        match_limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Callers or callees of every symbol called `name`, up to `depth` hops away.
+
+        A dotted name (`Cart.checkout`) must match the qualified name; a bare one (`checkout`)
+        also matches every symbol with that short name, so each match gets its own row.
+        """
+        if direction not in _NEIGHBOUR_PATTERNS:
+            raise ValueError(f"direction must be one of {sorted(_NEIGHBOUR_PATTERNS)}")
+        pattern = _NEIGHBOUR_PATTERNS[direction].replace("__DEPTH__", str(int(depth)))
+        query = _NEIGHBOURS_QUERY.replace("__PATTERN__", pattern)
+        with self._require_driver().session() as session:
+            result = session.run(
+                query,
+                repo_url=repo_url,
+                name=name,
+                bare="." not in name,
+                filepath=filepath,
+                limit=limit,
+                match_limit=match_limit,
             )
             return [record.data() for record in result]
 

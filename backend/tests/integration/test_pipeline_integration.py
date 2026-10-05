@@ -126,6 +126,41 @@ def test_graph_context_reports_inheritance(indexed_repo):
     assert "GiftCart.checkout" in rows[0]["methods"]
 
 
+def test_graph_context_reports_overrides_both_ways(indexed_repo):
+    repo_url, _ = indexed_repo
+    rows = graph_db.get_symbol_context(repo_url, anchors=[], names=["Cart.checkout", "GiftCart.checkout"], max_depth=1)
+    by_name = {r["name"]: r for r in rows}
+    assert [o["name"] for o in by_name["Cart.checkout"]["overridden_by"]] == ["GiftCart.checkout"]
+    assert [o["name"] for o in by_name["GiftCart.checkout"]["overrides"]] == ["Cart.checkout"]
+    assert by_name["Cart.checkout"]["overrides"] == []
+
+
+def test_callers_and_callees_by_depth(indexed_repo):
+    repo_url, _ = indexed_repo
+    [callers] = graph_db.get_call_neighbours(repo_url, "round_money", "callers", depth=3)
+    assert {(s["name"], s["hops"]) for s in callers["symbols"]} >= {("apply_discount", 1), ("Cart.checkout", 2)}
+
+    [callees] = graph_db.get_call_neighbours(repo_url, "Cart.checkout", "callees", depth=1)
+    assert {s["name"] for s in callees["symbols"]} == {"apply_discount", "Cart.total"}
+
+    # A bare name matches every definition with that short name, one row each.
+    rows = graph_db.get_call_neighbours(repo_url, "checkout", "callees", depth=1)
+    assert sorted(r["name"] for r in rows) == ["Cart.checkout", "GiftCart.checkout"]
+    assert graph_db.get_call_neighbours(repo_url, "nope", "callers") == []
+
+
+def test_stored_chunks_can_be_fetched_by_identity(indexed_repo):
+    repo_url, _ = indexed_repo
+    [row] = graph_db.get_symbol_context(repo_url, anchors=[], names=["GiftCart.checkout"], max_depth=1)
+    refs = [
+        {"filepath": row["filepath"], "symbol": row["name"], "start_line": row["start_line"]},
+        {"filepath": "missing.py", "symbol": "x", "start_line": 1},
+    ]
+    [chunk] = lexical_db.get_chunks(repo_url, refs)
+    assert chunk["symbol"] == "GiftCart.checkout"
+    assert "percent + 5" in chunk["code_text"]
+
+
 def test_repository_graph_endpoint_data(indexed_repo):
     repo_url, _ = indexed_repo
     graph = graph_db.get_repository_graph(repo_url, limit=50)

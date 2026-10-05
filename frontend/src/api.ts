@@ -66,8 +66,18 @@ export interface GraphNode {
 export interface GraphEdge {
   source: string
   target: string
-  type: 'CALLS' | 'INHERITS' | 'HAS_METHOD' | string
+  type: 'CALLS' | 'INHERITS' | 'HAS_METHOD' | 'OVERRIDES' | string
   hops?: number
+}
+
+/** Code the graph step added because a hit points to it (override, callee, named symbol). */
+export interface ExpandedHit {
+  symbol: string
+  filepath: string
+  start_line: number
+  end_line?: number
+  chunk_type?: string
+  reason: string
 }
 
 export interface StepEvent {

@@ -20,13 +20,11 @@ const uid = () => Math.random().toString(36).slice(2)
 
 function MiniPipeline({ msg }: { msg: Message }) {
   const seen = new Set((msg.trace ?? []).map((e) => e.node))
-  const strategy = msg.trace?.find((e) => e.node === 'retrieval_router')?.data.strategy
-  const firstPending = MINI_STEPS.findIndex((s) => !seen.has(s) && !(s === 'graph_search' && strategy === 'vector'))
+  const firstPending = MINI_STEPS.findIndex((s) => !seen.has(s))
   return (
     <div className="mini-pipe" aria-hidden>
       {MINI_STEPS.map((s, i) => {
-        const skipped = s === 'graph_search' && strategy === 'vector'
-        const cls = seen.has(s) ? 'done' : skipped ? 'skipped' : i === firstPending ? 'active' : ''
+        const cls = seen.has(s) ? 'done' : i === firstPending ? 'active' : ''
         return <span key={s} className={cls} />
       })}
       <span className={!msg.pending ? 'done' : firstPending === -1 ? 'active' : ''} />

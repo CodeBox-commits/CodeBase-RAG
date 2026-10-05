@@ -154,7 +154,7 @@ export default function ExplorePage() {
             {Object.entries(KIND_COLORS).map(([k, c]) => (
               <span key={k}><i style={{ background: hex(c) }} />{k} <b>{kindCounts[k] ?? 0}</b></span>
             ))}
-            {Object.entries(EDGE_COLORS).filter(([k]) => view === 'graph' || k !== 'HAS_METHOD').map(([k, c]) => (
+            {Object.entries(EDGE_COLORS).filter(([k]) => k !== 'OVERRIDES' && (view === 'graph' || k !== 'HAS_METHOD')).map(([k, c]) => (
               <span key={k}><i className="line" style={{ background: hex(c) }} />{k.replace('_', ' ').toLowerCase()}</span>
             ))}
           </div>
