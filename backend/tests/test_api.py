@@ -13,13 +13,13 @@ class FakeAgent:
     def __init__(self):
         self.calls = []
 
-    def run(self, question, repo_url):
-        self.calls.append((question, repo_url))
-        return f"answer for {repo_url}"
+    def run(self, question, repo_url, history=None):
+        self.calls.append((question, repo_url, history))
+        return {"answer": f"answer for {repo_url}", "citations": [], "status": "ok"}
 
-    def run_stream(self, question, repo_url):
+    def run_stream(self, question, repo_url, history=None):
         yield {"type": "step", "node": "query_planner", "data": {"query_type": "general"}}
-        yield {"type": "token", "content": self.run(question, repo_url)}
+        yield {"type": "answer", "content": self.run(question, repo_url, history)["answer"]}
 
 
 @pytest.fixture
@@ -48,7 +48,8 @@ def test_chat_normalises_repo_url_before_querying(client, fake_agent):
 
     assert res.status_code == 200
     assert res.json()["repo_url"] == "https://github.com/a/b"
-    assert fake_agent.calls == [("What does main do?", "https://github.com/a/b")]
+    assert res.json()["citations"] == [] and res.json()["status"] == "ok"
+    assert fake_agent.calls == [("What does main do?", "https://github.com/a/b", [])]
 
 
 def test_chat_streams_sse_events(client, fake_agent):
@@ -63,10 +64,37 @@ def test_chat_streams_sse_events(client, fake_agent):
     events = [e for e in res.text.split("\n\n") if e]
     assert json.loads(events[0].removeprefix("data: "))["node"] == "query_planner"
     assert json.loads(events[1].removeprefix("data: ")) == {
-        "type": "token",
+        "type": "answer",
         "content": "answer for https://github.com/a/b",
     }
     assert events[-1] == "data: [DONE]"
+
+
+def test_chat_passes_conversation_history(client, fake_agent):
+    history = [
+        {"role": "user", "content": "What does Signer.sign do?"},
+        {"role": "assistant", "content": "It signs a value (`signer.py:200`)."},
+    ]
+    res = client.post(
+        "/api/v1/chat/",
+        json={
+            "question": "And what calls it?",
+            "repo_url": "https://github.com/a/b",
+            "stream": False,
+            "history": history,
+        },
+    )
+    assert res.status_code == 200
+    assert fake_agent.calls[-1][2] == history
+    bad = client.post(
+        "/api/v1/chat/",
+        json={
+            "question": "And?",
+            "repo_url": "https://github.com/a/b",
+            "history": [{"role": "system", "content": "x"}],
+        },
+    )
+    assert bad.status_code == 422
 
 
 def test_chat_rejects_invalid_payload(client, fake_agent):

@@ -3,12 +3,13 @@ import os
 import time
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
 
 from app.core.schemas import RetrievalStrategy
+from app.services import citations as citation_check
 from app.services import code_intel
 from app.services.embeddings import EmbeddingSettings
 from app.services.graph_db import graph_db
@@ -48,9 +49,12 @@ class AgentConfig:
     impact_depth: int = 3
     impact_max_symbols: int = 60
     max_output_tokens: int = 2048
-    # The Google SDK already retries 429/503 with backoff; retrying again here only burns quota.
-    llm_retries: int = 0
-    llm_retry_backoff_seconds: float = 1.5
+    # Tried when the main model is rate-limited or overloaded (it has its own quota). The Google
+    # SDK already retries 429/503 with backoff before we get here.
+    llm_fallback_model: str | None = None
+    # Follow-up questions: how many earlier messages the planner and the answer prompt see.
+    history_messages: int = 6
+    history_answer_chars: int = 1200
 
     @classmethod
     def from_env(cls) -> "AgentConfig":
@@ -71,12 +75,26 @@ class AgentConfig:
             graph_fanout=int(os.getenv("GRAPH_FANOUT", "10")),
             graph_expand_limit=int(os.getenv("GRAPH_EXPAND_LIMIT", "6")),
             max_output_tokens=int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "2048")),
+            llm_fallback_model=os.getenv("LLM_FALLBACK_MODEL") or None,
         )
+
+
+AnswerStatus = Literal["ok", "fallback_model", "degraded"]
+
+
+class AgentResult(TypedDict):
+    answer: str
+    # Every `path:line` in the answer, checked against the context (see services/citations.py).
+    citations: list[dict[str, Any]]
+    # ok | fallback_model (main model unavailable) | degraded (no model: retrieved code listed)
+    status: AnswerStatus
 
 
 class AgentState(TypedDict):
     question: str
     repo_url: str
+    # Earlier messages of this conversation ({"role", "content"}), oldest first.
+    history: list[dict[str, str]]
     query_embeddings: list[list[float]]
     rewritten_queries: list[str]
     query_type: str
@@ -92,6 +110,8 @@ class AgentState(TypedDict):
     retrieval_strategy: RetrievalStrategy
     errors: list[str]
     answer: str
+    citations: list[dict[str, Any]]
+    answer_status: AnswerStatus
 
 
 class CodeAgent:
@@ -103,6 +123,16 @@ class CodeAgent:
             google_api_key=self.config.api_key,
             temperature=0,
             max_output_tokens=self.config.max_output_tokens,
+        )
+        self.fallback_llm = (
+            ChatGoogleGenerativeAI(
+                model=self.config.llm_fallback_model,
+                google_api_key=self.config.api_key,
+                temperature=0,
+                max_output_tokens=self.config.max_output_tokens,
+            )
+            if self.config.llm_fallback_model
+            else None
         )
         self.query_planner = QueryPlanner(self.llm)
         # Shared with search_code and the MCP server: one copy of each model per process.
@@ -143,7 +173,7 @@ class CodeAgent:
         errors = list(state.get("errors", []))
 
         try:
-            plan = self.query_planner.plan(state["question"])
+            plan = self.query_planner.plan(state["question"], state.get("history") or None)
         except Exception as e:
             logger.error("Query planner node failed: %s", e, exc_info=True)
             errors.append(f"query_planning_failed: {e}")
@@ -405,6 +435,7 @@ class CodeAgent:
         graph_metadata = self._format_graph_context(graph_results)
         impact_text = self._format_impact(state.get("impact_results", []))
 
+        history = state.get("history") or []
         system_prompt = (
             "You are a senior software engineer acting as a code assistant for a specific "
             "repository. You answer using ONLY the context provided below (vector-retrieved "
@@ -425,7 +456,9 @@ class CodeAgent:
             "call graph: base the list of affected code on it (grouped by file, closest first), "
             "It already includes super() calls, subclasses and overrides. Add one short caveat that "
             "calls the graph can't resolve statically (dynamic dispatch, external code) aren't listed.\n"
-            "6. Prefer concise, technically precise answers over padded explanations. Use "
+            "6. The question may follow up on the conversation so far: use it to resolve what "
+            "'it' or 'that' refers to, but cite only from the context below.\n"
+            "7. Prefer concise, technically precise answers over padded explanations. Use "
             "bullet points or short code blocks where they aid clarity."
         )
 
@@ -437,8 +470,10 @@ class CodeAgent:
                 + "\n".join(f"- {e}" for e in errors)
             )
 
+        conversation = self._format_history(history, self.config.history_answer_chars)
         user_content = (
-            f"User Question: {question}\n\n"
+            (f"--- Conversation So Far ---\n{conversation}\n\n" if conversation else "")
+            + f"User Question: {question}\n\n"
             f"--- Code Snippets (Vector Search) ---\n{code_snippets or 'No direct matches found.'}\n\n"
             f"--- Related Code (pulled in via the graph) ---\n{related_snippets or 'None.'}\n\n"
             f"--- Structural Graph Context ---\n{graph_metadata or 'No graph relationships retrieved.'}"
@@ -447,8 +482,43 @@ class CodeAgent:
             "Answer the question using the rules above."
         )
 
-        answer = self._invoke_llm_with_retry(system_prompt, user_content)
-        return {"answer": answer}
+        answer, status, failure = self._generate(system_prompt, user_content)
+        if answer is None:
+            answer = self._degraded_answer(failure, vector_results, expanded_results)
+
+        spans = [
+            *citation_check.snippet_spans(vector_results, self.config.snippet_max_lines),
+            *citation_check.snippet_spans(expanded_results, self.config.snippet_max_lines),
+            *citation_check.graph_spans(graph_results, state.get("impact_results", [])),
+        ]
+        citations = citation_check.check_citations(answer, spans)
+        summary = citation_check.summarize(citations)
+        if summary["total"] - summary["verified"] - summary["graph"]:
+            logger.warning("Answer has unsupported citations: %s", summary)
+        return {"answer": answer, "citations": citations, "answer_status": status}
+
+    @staticmethod
+    def _format_history(history: list[dict[str, str]], answer_chars: int) -> str:
+        lines = []
+        for turn in history:
+            text = (turn.get("content") or "").strip()
+            if turn.get("role") != "user" and len(text) > answer_chars:
+                text = text[:answer_chars] + " ..."
+            lines.append(f"{'User' if turn.get('role') == 'user' else 'Assistant'}: {text}")
+        return "\n\n".join(lines)
+
+    @staticmethod
+    def _degraded_answer(reason: str, hits: list[dict[str, Any]], related: list[dict[str, Any]]) -> str:
+        """No model available: still show what retrieval found, with real citations."""
+        found = [h for h in [*hits, *related] if h.get("filepath") and h.get("start_line")][:10]
+        head = f"**I couldn't generate an answer because {reason}.**"
+        if not found:
+            return f"{head} Retrieval found no matching code either. Please try again in a minute."
+        lines = [f"{head} Here is the code retrieval found for your question, most relevant first:", ""]
+        for h in found:
+            why = f" ({h['reason']})" if h.get("reason") else ""
+            lines.append(f"- `{h['filepath']}:{h['start_line']}` {h.get('symbol', '')}{why}")
+        return "\n".join(lines)
 
     @staticmethod
     def _format_code_snippets(vector_results: list[dict[str, Any]], max_lines: int = 60) -> str:
@@ -568,38 +638,34 @@ class CodeAgent:
             lines.append(line)
         return "\n".join(lines)
 
-    def _invoke_llm_with_retry(self, system_prompt: str, user_content: str) -> str:
-        last_error: Exception | None = None
-        for attempt in range(self.config.llm_retries + 1):
+    def _generate(self, system_prompt: str, user_content: str) -> tuple[str | None, AnswerStatus, str]:
+        """(answer, status, failure reason). The fallback model is only tried for capacity errors."""
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
+        attempts: list[tuple[AnswerStatus, Any]] = [("ok", self.llm)]
+        if getattr(self, "fallback_llm", None) is not None:
+            attempts.append(("fallback_model", self.fallback_llm))
+        reason = "the language model returned an error"
+        for status, llm in attempts:
             try:
-                response = self.llm.invoke(
-                    [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content},
-                    ]
-                )
                 # Gemini 3 returns content as a list of parts; .text flattens it to a string.
-                return response.text
+                return llm.invoke(messages).text, status, ""
             except Exception as e:
-                last_error = e
-                logger.error(f"Gemini LLM generation failed (attempt {attempt + 1}): {e}")
-                if attempt < self.config.llm_retries:
-                    time.sleep(self.config.llm_retry_backoff_seconds * (attempt + 1))
+                logger.error(f"LLM generation failed ({status}): {e}")
+                text = str(e)
+                if "RESOURCE_EXHAUSTED" in text or "429" in text:
+                    reason = "the model's rate limit or quota was reached"
+                elif "UNAVAILABLE" in text or "503" in text:
+                    reason = "the model is temporarily overloaded"
+                else:
+                    reason = "the language model returned an error"
+                    break  # not a capacity problem: another model won't fix it
+        return None, "degraded", reason
 
-        # Full error is logged above; the user gets a short, readable reason.
-        reason = str(last_error)
-        if "RESOURCE_EXHAUSTED" in reason or "429" in reason:
-            detail = "the model's rate limit or quota was reached"
-        elif "UNAVAILABLE" in reason or "503" in reason:
-            detail = "the model is temporarily overloaded"
-        else:
-            detail = "the language model returned an error"
-        return f"I couldn't generate an answer because {detail}. Please try again in a minute."
-
-    def _initial_state(self, question: str, repo_url: str) -> AgentState:
+    def _initial_state(self, question: str, repo_url: str, history: list[dict[str, str]] | None = None) -> AgentState:
         return {
             "question": question,
             "repo_url": repo_url,
+            "history": list(history or [])[-self.config.history_messages :],
             "query_type": "general",
             "complexity": "simple",
             "symbols": [],
@@ -613,25 +679,44 @@ class CodeAgent:
             "retrieval_strategy": "vector",
             "errors": [],
             "answer": "",
+            "citations": [],
+            "answer_status": "ok",
         }
 
-    def run(self, question: str, repo_url: str) -> str:
-        final_state = self.workflow.invoke(self._initial_state(question, repo_url))
-        return final_state["answer"]
+    def run(self, question: str, repo_url: str, history: list[dict[str, str]] | None = None) -> AgentResult:
+        final = self.workflow.invoke(self._initial_state(question, repo_url, history))
+        return {"answer": final["answer"], "citations": final["citations"], "status": final["answer_status"]}
 
-    def run_stream(self, question: str, repo_url: str) -> Iterator[dict[str, Any]]:
-        """Runs the workflow, yielding a UI event as each node finishes, then the answer.
+    def run_stream(
+        self, question: str, repo_url: str, history: list[dict[str, str]] | None = None
+    ) -> Iterator[dict[str, Any]]:
+        """Runs the workflow, yielding events as it goes:
 
-        Events are summaries for visualisation (no embeddings, trimmed code), so the
-        client can show what each pipeline step actually did.
+        - {"type": "step"}   once per pipeline step, a summary for visualisation
+        - {"type": "token"}  answer text as the model writes it (deltas, to append)
+        - {"type": "answer"} the final answer with checked citations; replaces the streamed text
+          (it differs when the fallback model or the no-model answer took over)
         """
-        state: dict[str, Any] = dict(self._initial_state(question, repo_url))
-        for update in self.workflow.stream(state, stream_mode="updates"):
-            for node, delta in update.items():
+        state: dict[str, Any] = dict(self._initial_state(question, repo_url, history))
+        for mode, chunk in self.workflow.stream(state, stream_mode=["updates", "messages"]):
+            if mode == "messages":
+                message, metadata = chunk
+                # Only the answer: the planner's structured-output call streams through here too.
+                if metadata.get("langgraph_node") == "generate_response":
+                    text = getattr(message, "text", "")
+                    if isinstance(text, str) and text:
+                        yield {"type": "token", "content": text}
+                continue
+            for node, delta in chunk.items():
                 started = time.perf_counter()
                 state.update(delta or {})
                 if node == "generate_response":
-                    yield {"type": "token", "content": state["answer"]}
+                    yield {
+                        "type": "answer",
+                        "content": state["answer"],
+                        "citations": state["citations"],
+                        "status": state["answer_status"],
+                    }
                     continue
                 event = self._summarize_step(node, state)
                 event["summary_ms"] = round((time.perf_counter() - started) * 1000, 2)

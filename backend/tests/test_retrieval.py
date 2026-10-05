@@ -204,7 +204,7 @@ def test_planner_node_maps_one_plan_onto_state(bare_agent):
     from app.core.schemas import QueryPlan
 
     class FakePlanner:
-        def plan(self, question):
+        def plan(self, question, history=None):
             return QueryPlan(
                 query_type="dependency",
                 complexity="simple",
@@ -318,7 +318,7 @@ def test_run_stream_emits_one_event_per_step_then_the_answer(bare_agent, monkeyp
     from types import SimpleNamespace
 
     bare_agent.query_planner = SimpleNamespace(
-        plan=lambda q: SimpleNamespace(
+        plan=lambda q, history=None: SimpleNamespace(
             query_type="dependency",
             complexity="simple",
             symbols=["save"],
@@ -326,7 +326,7 @@ def test_run_stream_emits_one_event_per_step_then_the_answer(bare_agent, monkeyp
         )
     )
     bare_agent.embeddings = SimpleNamespace(embed_queries=lambda qs: [[0.1] * 768 for _ in qs])
-    bare_agent._invoke_llm_with_retry = lambda system, user: "final answer"
+    bare_agent._generate = lambda system, user: ("final answer", "ok", "")
     monkeypatch.setattr(
         agent_module.hybrid_search,
         "search",
@@ -362,4 +362,4 @@ def test_run_stream_emits_one_event_per_step_then_the_answer(bare_agent, monkeyp
     assert retrieved["results"][0]["symbol"] == "Base.save"
     assert "code_text" not in retrieved["results"][0]
     assert "save" in retrieved["lexical_terms"]
-    assert events[-1] == {"type": "token", "content": "final answer"}
+    assert events[-1] == {"type": "answer", "content": "final answer", "citations": [], "status": "ok"}

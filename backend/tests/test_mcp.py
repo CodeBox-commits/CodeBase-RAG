@@ -18,6 +18,7 @@ EXPECTED_TOOLS = {
     "search_code",
     "find_definition",
     "get_symbol_code",
+    "get_code_at",
     "find_callers",
     "find_callees",
     "impact_of",

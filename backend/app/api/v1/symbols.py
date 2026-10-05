@@ -79,6 +79,19 @@ router.add_api_route(
 )
 
 
+@router.get("/at")
+async def code_at(
+    repo_url: str = RepoQuery,
+    filepath: str = Query(..., min_length=1, max_length=500),
+    line: int = Query(..., ge=1),
+):
+    """The innermost indexed symbol containing `filepath:line`, with its code (for citations)."""
+    found = _graph_call(code_intel.code_at, normalize_repo_url(repo_url), filepath, line)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"No indexed symbol contains {filepath}:{line}")
+    return found
+
+
 @router.get("/impact")
 async def impact(
     repo_url: str = RepoQuery,

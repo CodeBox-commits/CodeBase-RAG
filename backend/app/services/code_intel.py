@@ -56,6 +56,17 @@ def get_symbol_code(repo_url: str, name: str, filepath: str | None = None) -> li
     return lexical_db.get_chunks(repo_url, refs)
 
 
+def code_at(repo_url: str, filepath: str, line: int) -> dict[str, Any] | None:
+    """The indexed symbol containing `filepath:line`, with its code (what a citation points at)."""
+    graph_db.connect()
+    symbol = graph_db.symbol_at(repo_url, filepath, line)
+    if symbol is None:
+        return None
+    ref = {"filepath": symbol["filepath"], "symbol": symbol["name"], "start_line": symbol["start_line"]}
+    chunks = lexical_db.get_chunks(repo_url, [ref])
+    return {**symbol, "code": chunks[0]["code_text"] if chunks else None}
+
+
 def call_neighbours(
     repo_url: str,
     name: str,

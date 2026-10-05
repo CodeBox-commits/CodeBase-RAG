@@ -108,6 +108,19 @@ def get_symbol_code(repo_url: str, name: str, filepath: str | None = None) -> di
 
 
 @mcp.tool(annotations=READ_ONLY)
+def get_code_at(repo_url: str, filepath: str, line: int) -> dict[str, Any]:
+    """The function, method or class containing `filepath:line`, with its code.
+
+    Use it to check a file:line reference (for example a citation from ask_codebase).
+    """
+    repo = _repo(repo_url)
+    found = code_intel.code_at(repo, filepath, line)
+    if found is None:
+        raise ToolError(f"No indexed symbol contains {filepath}:{line} in {repo}.")
+    return {**found, "code": _trim(found.get("code") or "")}
+
+
+@mcp.tool(annotations=READ_ONLY)
 def find_callers(repo_url: str, name: str, depth: int = 1, filepath: str | None = None) -> dict[str, Any]:
     """Symbols that call this one, up to `depth` (1-5) hops back, nearest first."""
     repo = _repo(repo_url)
@@ -154,7 +167,9 @@ def ask_codebase(repo_url: str, question: str) -> dict[str, Any]:
         agent = get_agent()
     except RuntimeError as e:
         raise ToolError(str(e)) from e
-    return {"question": question, "answer": agent.run(question, _repo(repo_url))}
+    result = agent.run(question, _repo(repo_url))
+    # Citations carry a status (verified / graph / wrong_line / unknown_file): trust accordingly.
+    return {"question": question, **result}
 
 
 # --- HTTP wiring ---------------------------------------------------------------------
