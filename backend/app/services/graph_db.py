@@ -98,6 +98,46 @@ RETURN n.qualified_name AS name, n.filepath AS filepath, n.start_line AS start_l
        n.end_line AS end_line, n.type AS type, found[..$limit] AS symbols, size(found) AS total
 """
 
+_FIND_QUERY = """
+MATCH (n:Symbol {repo_url: $repo_url})
+WHERE (n.qualified_name = $name OR ($bare AND n.name = $name))
+  AND ($filepath IS NULL OR n.filepath = $filepath)
+RETURN n.qualified_name AS name, n.filepath AS filepath, n.start_line AS start_line,
+       n.end_line AS end_line, n.type AS type
+ORDER BY filepath, name
+LIMIT $limit
+"""
+
+# One level of "what depends on these symbols": callers, subclasses and (optionally)
+# overriding methods. Impact analysis walks this level by level, so the cost stays linear
+# in the number of affected symbols instead of in the number of paths.
+_DEPENDENTS_QUERY = """
+UNWIND $frontier AS f
+MATCH (n:Symbol {repo_url: $repo_url, filepath: f.filepath, qualified_name: f.name})
+CALL {
+    WITH n
+    MATCH (m:Symbol)-[r:CALLS|INHERITS]->(n)
+    RETURN m, type(r) AS relation
+    UNION
+    WITH n
+    MATCH (n)<-[:HAS_METHOD]-(:Class)<-[:INHERITS*1..5]-(:Class)-[:HAS_METHOD]->(m)
+    WHERE $with_overrides AND m.name = n.name
+    RETURN m, "OVERRIDES" AS relation
+}
+RETURN f.filepath AS via_filepath, f.name AS via_name,
+       m.qualified_name AS name, m.filepath AS filepath, m.start_line AS start_line,
+       m.end_line AS end_line, m.type AS type, relation
+// An override that also calls super() is reported as the more specific "OVERRIDES".
+ORDER BY via_filepath, via_name, CASE relation WHEN "OVERRIDES" THEN 0 ELSE 1 END, relation, filepath, name
+"""
+
+_REPOSITORIES_QUERY = """
+MATCH (r:Repository)
+RETURN r.url AS url, r.last_indexed AS last_indexed,
+       COUNT { (r)-[:CONTAINS_CLASS|CONTAINS_FUNCTION]->() } AS symbols
+ORDER BY r.last_indexed DESC
+"""
+
 _NEIGHBOUR_PATTERNS = {"callees": "-[:CALLS*1..__DEPTH__]->", "callers": "<-[:CALLS*1..__DEPTH__]-"}
 
 
@@ -285,6 +325,30 @@ class Neo4jService:
                 match_limit=match_limit,
             )
             return [record.data() for record in result]
+
+    def find_symbols(
+        self, repo_url: str, name: str, filepath: str | None = None, limit: int = 10
+    ) -> list[dict[str, Any]]:
+        """Definitions called `name` (qualified if dotted, else also by short name)."""
+        with self._require_driver().session() as session:
+            result = session.run(
+                _FIND_QUERY, repo_url=repo_url, name=name, bare="." not in name, filepath=filepath, limit=limit
+            )
+            return [record.data() for record in result]
+
+    def get_direct_dependents(
+        self, repo_url: str, frontier: list[dict[str, str]], with_overrides: bool = False
+    ) -> list[dict[str, Any]]:
+        """Symbols one edge away that depend on any symbol in `frontier` ({"filepath", "name"})."""
+        if not frontier:
+            return []
+        with self._require_driver().session() as session:
+            result = session.run(_DEPENDENTS_QUERY, repo_url=repo_url, frontier=frontier, with_overrides=with_overrides)
+            return [record.data() for record in result]
+
+    def list_repositories(self) -> list[dict[str, Any]]:
+        with self._require_driver().session() as session:
+            return [record.data() for record in session.run(_REPOSITORIES_QUERY)]
 
     def get_repository_graph(self, repo_url: str, limit: int = 400) -> dict[str, Any]:
         """The most connected symbols of a repository and the edges between them."""

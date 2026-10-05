@@ -86,3 +86,21 @@ def test_calls_include_decorators_and_attribute_chains_but_not_nested_bodies():
 def test_invalid_or_empty_source_yields_no_chunks():
     assert parse_source("x.py", "") == []
     assert parse_source("x.py", "def broken(:\n") == []
+
+
+def test_overload_stubs_are_skipped_and_the_implementation_kept():
+    source = """
+import typing as t
+from typing import overload
+
+class Signer:
+    @t.overload
+    def unsign(self, value: str, ts: t.Literal[False] = False) -> bytes: ...
+    @overload
+    def unsign(self, value: str, ts: t.Literal[True]) -> tuple[bytes, int]: ...
+    def unsign(self, value, ts=False):
+        return self.verify(value)
+"""
+    chunks = [c for c in parse_source("signer.py", source) if c.qualified_name == "Signer.unsign"]
+    assert len(chunks) == 1
+    assert chunks[0].start_line == 10 and chunks[0].calls == ["self.verify"]

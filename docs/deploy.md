@@ -64,12 +64,15 @@ but not to the internet, and nothing outside can reach them.
 git clone https://github.com/CodeBox-commits/git-rag-project.git /opt/git-rag-project
 cd /opt/git-rag-project
 cp deploy/.env.example deploy/.env
-# edit deploy/.env: DOMAIN, TAG, GEMINI_API_KEY, and strong passwords:
+# edit deploy/.env: DOMAIN, TAG, GEMINI_API_KEY, and strong passwords and MCP token:
 openssl rand -hex 24
 chmod 600 deploy/.env
 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d
 curl -s https://$DOMAIN/ready
 ```
+
+The MCP endpoint is `https://$DOMAIN/mcp`. It only answers requests for `$DOMAIN` and
+requires `Authorization: Bearer $MCP_TOKEN` on every call.
 
 Point the domain's DNS A record at the server first: Caddy needs it to get a
 certificate. Open only ports 22, 80 and 443 in the firewall.

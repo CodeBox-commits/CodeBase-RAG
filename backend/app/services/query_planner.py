@@ -19,6 +19,7 @@ Return four fields:
    - call_flow: execution flow, data flow or interactions across multiple functions/components
    - architecture: high-level structure, organization or design of the repository
    - bug_analysis: investigating a bug, failure, error or unexpected behavior
+   - impact: what could break or need updating if a symbol is changed, renamed or removed
    - general: a repository question that fits none of the above
 
 2. complexity:
@@ -53,6 +54,10 @@ Examples:
 "How is this backend architected?"
 -> architecture, complex, symbols=[],
    queries=["application entry point routers services", "backend module structure"]
+
+"What breaks if I change the signature of hybrid_search.search?"
+-> impact, complex, symbols=["hybrid_search.search"],
+   queries=["hybrid_search.search callers", "hybrid_search.search usage"]
 
 "Why could repository indexing fail?"
 -> bug_analysis, complex, symbols=[],

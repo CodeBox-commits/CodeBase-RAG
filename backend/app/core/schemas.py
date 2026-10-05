@@ -42,6 +42,7 @@ QueryType = Literal[
     "call_flow",
     "architecture",
     "bug_analysis",
+    "impact",
     "general",
 ]
 

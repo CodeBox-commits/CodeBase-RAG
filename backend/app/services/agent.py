@@ -9,12 +9,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
 
 from app.core.schemas import RetrievalStrategy
-from app.services.embeddings import EmbeddingSettings, build_embeddings
+from app.services import code_intel
+from app.services.embeddings import EmbeddingSettings
 from app.services.graph_db import graph_db
 from app.services.hybrid_search import hybrid_search
 from app.services.lexical_db import DEFAULT_FIELDS, LexicalDB, lexical_db
 from app.services.query_planner import QueryPlanner
-from app.services.reranker import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,9 @@ class AgentConfig:
     graph_fanout: int = 10
     # Code pulled in through the graph (overrides, named symbols, direct callees) on top of the hits.
     graph_expand_limit: int = 6
+    # Impact questions: how far back to walk dependents, and how many to list per symbol.
+    impact_depth: int = 3
+    impact_max_symbols: int = 60
     max_output_tokens: int = 2048
     # The Google SDK already retries 429/503 with backoff; retrying again here only burns quota.
     llm_retries: int = 0
@@ -83,6 +86,8 @@ class AgentState(TypedDict):
     graph_results: list[dict[str, Any]]
     # Code of related symbols the graph found but search didn't return, each with a "reason".
     expanded_results: list[dict[str, Any]]
+    # "What breaks if X changes": dependents of each named symbol, from code_intel.impact.
+    impact_results: list[dict[str, Any]]
     rerank_info: dict[str, Any]
     retrieval_strategy: RetrievalStrategy
     errors: list[str]
@@ -100,8 +105,9 @@ class CodeAgent:
             max_output_tokens=self.config.max_output_tokens,
         )
         self.query_planner = QueryPlanner(self.llm)
-        self.embeddings = build_embeddings(EmbeddingSettings.from_env(), api_key=self.config.api_key)
-        self.reranker = CrossEncoderReranker.from_env()
+        # Shared with search_code and the MCP server: one copy of each model per process.
+        self.embeddings = code_intel.get_embeddings()
+        self.reranker = code_intel.get_reranker()
         self.workflow = self._build_workflow()
 
     def _build_workflow(self) -> Any:
@@ -177,7 +183,7 @@ class CodeAgent:
         ):
             strategy: RetrievalStrategy = "vector"
 
-        elif query_type == "call_flow":
+        elif query_type in ("call_flow", "impact"):
             strategy = "graph"
 
         elif query_type in (
@@ -319,7 +325,29 @@ class CodeAgent:
                 logger.error(f"Fetching graph-related code failed: {e}", exc_info=True)
                 errors.append(f"graph_expansion_failed: {e}")
 
-        return {"graph_results": graph_context, "expanded_results": expanded, "errors": errors}
+        impact_results: list[dict[str, Any]] = []
+        if state.get("query_type") == "impact":
+            for name in names[:3]:
+                try:
+                    report = code_intel.impact(
+                        state["repo_url"],
+                        name,
+                        depth=self.config.impact_depth,
+                        max_symbols=self.config.impact_max_symbols,
+                    )
+                except Exception as e:
+                    logger.error(f"Impact analysis failed for {name}: {e}", exc_info=True)
+                    errors.append(f"impact_failed: {name}: {e}")
+                    continue
+                if report is not None:
+                    impact_results.append(report)
+
+        return {
+            "graph_results": graph_context,
+            "expanded_results": expanded,
+            "impact_results": impact_results,
+            "errors": errors,
+        }
 
     @staticmethod
     def expansion_refs(
@@ -375,6 +403,7 @@ class CodeAgent:
         code_snippets = self._format_code_snippets(vector_results, self.config.snippet_max_lines)
         related_snippets = self._format_code_snippets(expanded_results, self.config.snippet_max_lines)
         graph_metadata = self._format_graph_context(graph_results)
+        impact_text = self._format_impact(state.get("impact_results", []))
 
         system_prompt = (
             "You are a senior software engineer acting as a code assistant for a specific "
@@ -392,7 +421,11 @@ class CodeAgent:
             "graph context rather than inferring it from the snippet text alone.\n"
             "4. When a method is overridden in a subclass, check which version actually runs for "
             "the object in question; the override's behaviour usually decides the answer.\n"
-            "5. Prefer concise, technically precise answers over padded explanations. Use "
+            "5. For impact questions, the Impact Analysis section is computed exactly from the "
+            "call graph: base the list of affected code on it (grouped by file, closest first), "
+            "It already includes super() calls, subclasses and overrides. Add one short caveat that "
+            "calls the graph can't resolve statically (dynamic dispatch, external code) aren't listed.\n"
+            "6. Prefer concise, technically precise answers over padded explanations. Use "
             "bullet points or short code blocks where they aid clarity."
         )
 
@@ -409,7 +442,8 @@ class CodeAgent:
             f"--- Code Snippets (Vector Search) ---\n{code_snippets or 'No direct matches found.'}\n\n"
             f"--- Related Code (pulled in via the graph) ---\n{related_snippets or 'None.'}\n\n"
             f"--- Structural Graph Context ---\n{graph_metadata or 'No graph relationships retrieved.'}"
-            f"{context_note}\n\n"
+            + (f"\n\n--- Impact Analysis (exact, from the call graph) ---\n{impact_text}" if impact_text else "")
+            + f"{context_note}\n\n"
             "Answer the question using the rules above."
         )
 
@@ -476,6 +510,27 @@ class CodeAgent:
             )
 
         return [hit for hit in results if not is_nested(hit)]
+
+    @staticmethod
+    def _format_impact(reports: list[dict[str, Any]], per_report: int = 40) -> str:
+        blocks = []
+        for r in reports:
+            targets = ", ".join(f"{t['name']} ({t['filepath']}:{t['start_line']})" for t in r["targets"])
+            head = (
+                f"Changing {r['name']} [{targets}] can affect {r['total']} symbols across "
+                f"{len(r['files'])} files (up to {r['depth']} hops"
+                + (", list truncated)" if r.get("truncated") else ")")
+            )
+            lines = [head]
+            for a in r["affected"][:per_report]:
+                lines.append(
+                    f"- {a['name']} ({a['filepath']}:{a['start_line']}) {a['relation']} "
+                    f"{a['via']['name']}, {a['hops']} hop{'s' if a['hops'] > 1 else ''} away"
+                )
+            if r["total"] > per_report:
+                lines.append(f"- ... and {r['total'] - per_report} more")
+            blocks.append("\n".join(lines))
+        return "\n\n".join(blocks)
 
     @staticmethod
     def _format_graph_context(graph_results: list[dict[str, Any]]) -> str:
@@ -553,6 +608,7 @@ class CodeAgent:
             "vector_results": [],
             "graph_results": [],
             "expanded_results": [],
+            "impact_results": [],
             "rerank_info": {},
             "retrieval_strategy": "vector",
             "errors": [],
@@ -649,6 +705,10 @@ class CodeAgent:
                 if state.get("retrieval_strategy") == "vector"
                 else self.config.graph_max_depth
             )
+            data["impact"] = [
+                {k: r.get(k) for k in ("name", "depth", "total", "truncated", "files")}
+                for r in state.get("impact_results", [])
+            ]
             data["expanded"] = [
                 {k: r.get(k) for k in ("symbol", "filepath", "start_line", "end_line", "chunk_type", "reason")}
                 for r in state.get("expanded_results", [])

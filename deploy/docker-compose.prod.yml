@@ -30,6 +30,10 @@ x-app: &app
     NEO4J_USER: neo4j
     NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     ALLOWED_ORIGINS: https://${DOMAIN}
+    # MCP at https://${DOMAIN}/mcp: only this Host is served, and every call needs the token.
+    MCP_ALLOWED_HOSTS: ${DOMAIN},${DOMAIN}:*
+    MCP_ALLOWED_ORIGINS: https://${DOMAIN}
+    MCP_TOKEN: ${MCP_TOKEN:?set MCP_TOKEN in deploy/.env}
   depends_on:
     redis: { condition: service_healthy }
     qdrant: { condition: service_healthy }

@@ -159,8 +159,9 @@ class _Walker:
             node = stack.pop()
             if node.type == "call_expression":
                 name = _reference_name(node.child_by_field_name("function"))
-                if name and name != "super" and not name.startswith("super."):
-                    found.add(name)
+                if name:
+                    # A bare `super(...)` in a constructor calls the base class constructor.
+                    found.add("super.constructor" if name == "super" else name)
             elif node.type == "new_expression":
                 name = _reference_name(node.child_by_field_name("constructor"))
                 if name:
@@ -203,6 +204,7 @@ class _Walker:
 class _TreeSitterLanguage(Language):
     package_stems = ("index",)
     self_names = ("this",)
+    constructor_names = ("constructor",)
     # Grammar per extension (TSX and JSX need the JSX-aware grammars).
     grammars: ClassVar[dict[str, Callable[[], object]]]
 

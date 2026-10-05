@@ -378,6 +378,22 @@ code, .mono { font-family: var(--mono); font-size: 0.88em; }
 .nb button:hover { background: var(--ink-3); }
 .nb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; }
 .nb-type { font-size: 12px; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
+.impact { margin-top: 10px; }
+.impact-head { font-size: 13px; font-weight: 600; color: var(--fog); margin: 12px 0 4px; }
+.impact-sum { font-size: 14px; margin: 0 0 8px; }
+.impact-sum b { color: var(--lit); font-size: 17px; font-variant-numeric: tabular-nums; }
+.impact-none { margin-top: 12px; }
+.impact-file h4 { font-size: 12px; font-weight: 500; color: var(--paper); margin: 14px 0 4px; word-break: break-all; }
+.impact-file ul { list-style: none; margin: 0; padding: 0; }
+.impact-file button { width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 5px 8px; border-radius: var(--r-sm); text-align: left; font-size: 13px; }
+.impact-file button:hover:not(:disabled) { background: var(--ink-3); }
+.impact-file button:disabled { opacity: 0.55; cursor: default; }
+/* Hop distance: closest dependents are the brightest. */
+.hop { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.hop-1 { background: var(--lit); }
+.hop-2 { background: color-mix(in srgb, var(--lit) 65%, var(--ink)); }
+.hop-3 { background: color-mix(in srgb, var(--lit) 40%, var(--ink)); color: var(--paper); }
 .kind-dot { width: 8px; height: 8px; flex-shrink: 0; }
 .detail-empty p { margin: 8px 0 0; }
 .explore-detail .btn { margin-top: 18px; }

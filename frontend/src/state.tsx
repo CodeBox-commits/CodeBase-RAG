@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { getStatus, startIndex, type IndexResult, type IngestProgress, type StepEvent } from './api'
+import { getStatus, listRepos, startIndex, type IndexResult, type IngestProgress, type StepEvent } from './api'
 import { load, save } from './storage'
 
 export type RepoState = 'indexing' | 'ready' | 'failed'
@@ -60,6 +60,23 @@ export function RepoProvider({ children }: { children: ReactNode }) {
   useEffect(() => { save('repos', repos) }, [repos])
   useEffect(() => { save('active', activeUrl) }, [activeUrl])
   useEffect(() => { save('chats', chats) }, [chats])
+
+  // The server is the source of truth for what's indexed: add repos indexed elsewhere
+  // (another browser, the dev server on :5173, the API or an MCP client).
+  useEffect(() => {
+    listRepos()
+      .then((server) => {
+        setRepos((rs) => {
+          const known = new Set(rs.map((r) => r.url))
+          const added: Repo[] = server
+            .filter((s) => !known.has(s.url))
+            .map((s) => ({ url: s.url, state: 'ready', indexedAt: s.last_indexed ?? undefined }))
+          return added.length ? [...rs, ...added] : rs
+        })
+        setActiveUrl((cur) => cur ?? server[0]?.url ?? null)
+      })
+      .catch(() => { /* offline or old backend: the local list still works */ })
+  }, [])
 
   const patch = (url: string, p: Partial<Repo>) =>
     setRepos((rs) => rs.map((r) => (r.url === url ? { ...r, ...p } : r)))

@@ -18,6 +18,8 @@ class Language(ABC):
     self_names: ClassVar[tuple[str, ...]] = ()
     # File stems that stand for their directory as a module (`__init__.py`, `index.ts`).
     package_stems: ClassVar[tuple[str, ...]] = ()
+    # Methods that run when the class is instantiated: `Cls(...)` / `new Cls(...)` calls them.
+    constructor_names: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
     def parse(self, file_path: str, source: str) -> list[ExtractedChunk]:

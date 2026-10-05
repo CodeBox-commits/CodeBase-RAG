@@ -93,6 +93,27 @@ export interface RepoGraph {
   total_symbols: number
 }
 
+export interface ImpactItem {
+  name: string
+  filepath: string
+  start_line: number
+  end_line: number
+  type: string
+  hops: number
+  relation: 'calls' | 'subclasses' | 'overrides' | string
+  via: { name: string; filepath: string }
+}
+
+export interface ImpactReport {
+  name: string
+  depth: number
+  targets: { name: string; filepath: string; start_line: number; end_line: number; type: string }[]
+  total: number
+  truncated: boolean
+  files: { filepath: string; count: number; nearest_hops: number; symbols: string[] }[]
+  affected: ImpactItem[]
+}
+
 async function readError(res: Response): Promise<string> {
   try {
     const body = await res.json()
@@ -113,6 +134,19 @@ export async function startIndex(repoUrl: string): Promise<{ task_id: string; re
   return res.json()
 }
 
+export interface IndexedRepo {
+  url: string
+  last_indexed: number | null
+  symbols: number
+}
+
+/** Every repository indexed on the server, whichever browser or client indexed it. */
+export async function listRepos(): Promise<IndexedRepo[]> {
+  const res = await fetch('/api/v1/repo/list')
+  if (!res.ok) throw new Error(await readError(res))
+  return (await res.json()).repositories
+}
+
 export async function getStatus(taskId: string): Promise<TaskStatus> {
   const res = await fetch(`/api/v1/repo/status/${encodeURIComponent(taskId)}`)
   if (!res.ok) throw new Error(await readError(res))
@@ -122,6 +156,15 @@ export async function getStatus(taskId: string): Promise<TaskStatus> {
 export async function getRepoGraph(repoUrl: string, limit = 400): Promise<RepoGraph> {
   const params = new URLSearchParams({ repo_url: repoUrl, limit: String(limit) })
   const res = await fetch(`/api/v1/repo/graph?${params}`)
+  if (!res.ok) throw new Error(await readError(res))
+  return res.json()
+}
+
+/** Everything that calls, subclasses or overrides a symbol, up to `depth` hops back. */
+export async function getImpact(repoUrl: string, name: string, filepath?: string | null, depth = 3): Promise<ImpactReport> {
+  const params = new URLSearchParams({ repo_url: repoUrl, name, depth: String(depth) })
+  if (filepath) params.set('filepath', filepath)
+  const res = await fetch(`/api/v1/symbols/impact?${params}`)
   if (!res.ok) throw new Error(await readError(res))
   return res.json()
 }

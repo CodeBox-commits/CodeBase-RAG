@@ -79,11 +79,12 @@ def test_typescript_bases_skip_implements_and_generics():
     assert chunks["TimedSigner"].bases == ["Signer"]
 
 
-def test_calls_include_this_new_and_anonymous_callbacks_but_not_super():
+def test_calls_include_this_new_super_and_anonymous_callbacks():
     chunks = _by_qname("src/signer.ts", TS_SOURCE)
     assert chunks["Signer.sign"].calls == ["hash", "this.digest"]
     assert "encode" in chunks["Signer.digest"].calls  # inside an anonymous arrow callback
-    assert chunks["TimedSigner.sign"].calls == ["Date.now"]
+    assert chunks["TimedSigner.sign"].calls == ["Date.now", "super.sign"]
+    assert chunks["Signer.constructor"].calls == ["super.constructor"]
     assert chunks["makeSigner"].calls == ["inner"]  # the nested function's own calls stay with it
     assert chunks["makeSigner.inner"].calls == ["TimedSigner"]
     assert chunks["verify"].calls == ["utils.check"]
@@ -135,3 +136,5 @@ def test_cross_file_resolution_for_typescript():
     assert (("src/signer.ts", "TimedSigner"), ("src/signer.ts", "Signer")) in rel.inherits
     assert (("src/signer.ts", "Signer"), ("src/base.ts", "Base")) in rel.inherits
     assert (("src/signer.ts", "Signer"), ("src/signer.ts", "Signer.sign")) in rel.has_method
+    # super.sign() in the subclass reaches the base class's method
+    assert (("src/signer.ts", "TimedSigner.sign"), ("src/signer.ts", "Signer.sign")) in rel.calls

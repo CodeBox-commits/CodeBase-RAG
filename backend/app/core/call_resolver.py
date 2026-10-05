@@ -48,6 +48,30 @@ class _SymbolIndex:
             parts.pop()
         return None
 
+    def resolve_super(self, name: str, source: ExtractedChunk, max_levels: int = 5) -> SymbolKey | None:
+        """`super().name()` / `super.name()`: the nearest base class (breadth-first) defining `name`."""
+        owner = self.enclosing_class(source)
+        if owner is None:
+            return None
+        level = [self.by_key[(source.file_path, owner)]]
+        visited: set[SymbolKey] = set()
+        for _ in range(max_levels):
+            next_level = []
+            for cls in level:
+                for base in cls.bases:
+                    target = self.resolve(base, cls, {"class"})
+                    if target is None or target in visited:
+                        continue
+                    visited.add(target)
+                    method = (target[0], f"{target[1]}.{name}")
+                    if method in self.by_key:
+                        return method
+                    next_level.append(self.by_key[target])
+            if not next_level:
+                return None
+            level = next_level
+        return None
+
     def resolve(self, ref: str, source: ExtractedChunk, kinds: set[str]) -> SymbolKey | None:
         """Best-effort static resolution of a call/base reference to a definition.
 
@@ -56,6 +80,9 @@ class _SymbolIndex:
         """
         parts = ref.split(".")
         name = parts[-1]
+        if parts[0] == "super" and len(parts) == 2:
+            # Python's super().x() and JS/TS super.x() both reach the base class's method.
+            return self.resolve_super(name, source)
         # Calls never cross languages (a JS frontend doesn't call the Python backend directly).
         candidates = [c for c in self.by_name.get(name, []) if c.type in kinds and c.language == source.language]
         if not candidates:

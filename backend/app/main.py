@@ -15,6 +15,8 @@ from app.api.health import router as health_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.repo import router as repo_router
 from app.api.v1.symbols import router as symbols_router
+from app.mcp_server import build_routes as build_mcp_routes
+from app.mcp_server import mcp
 from app.services.graph_db import graph_db
 from app.services.vector_db import vector_db
 
@@ -47,7 +49,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.critical(f"❌ Initialization warning: Infrastructure connectivity failed: {e}")
 
-    yield
+    # The MCP endpoint's task group; it lives as long as the app.
+    async with mcp.session_manager.run():
+        yield
 
     logger.info("Gracefully tearing down database connection pools...")
     graph_db.close()
@@ -102,6 +106,8 @@ app.include_router(health_router)
 app.include_router(repo_router, prefix="/api/v1/repo", tags=["Repository Ingestion"])
 app.include_router(chat_router, prefix="/api/v1/chat", tags=["Agent Query Engine"])
 app.include_router(symbols_router, prefix="/api/v1/symbols", tags=["Code Intelligence"])
+# MCP over streamable HTTP at /mcp (see app/mcp_server.py); must precede the "/" UI mount.
+app.router.routes.extend(build_mcp_routes())
 
 
 @app.exception_handler(Exception)
