@@ -1,3 +1,5 @@
+import type { Citation } from './citations'
+
 export type TaskState =
   | 'PENDING' | 'CLONING' | 'PARSING' | 'EMBEDDING' | 'STORING' | 'LINKING' | 'SUCCESS' | 'FAILURE' | string
 
@@ -160,6 +162,29 @@ export async function getRepoGraph(repoUrl: string, limit = 400): Promise<RepoGr
   return res.json()
 }
 
+export interface CodeAt {
+  name: string
+  filepath: string
+  start_line: number
+  end_line: number
+  type: string
+  code: string | null
+}
+
+/** The indexed symbol containing filepath:line, with its code (what a citation points at). */
+export async function getCodeAt(repoUrl: string, filepath: string, line: number): Promise<CodeAt> {
+  const params = new URLSearchParams({ repo_url: repoUrl, filepath, line: String(line) })
+  const res = await fetch(`/api/v1/symbols/at?${params}`)
+  if (!res.ok) throw new Error(await readError(res))
+  return res.json()
+}
+
+/** Removes a repository's vectors, search entries and graph from the server. */
+export async function deleteRepo(repoUrl: string): Promise<void> {
+  const res = await fetch(`/api/v1/repo?${new URLSearchParams({ repo_url: repoUrl })}`, { method: 'DELETE' })
+  if (!res.ok && res.status !== 404) throw new Error(await readError(res))
+}
+
 /** Everything that calls, subclasses or overrides a symbol, up to `depth` hops back. */
 export async function getImpact(repoUrl: string, name: string, filepath?: string | null, depth = 3): Promise<ImpactReport> {
   const params = new URLSearchParams({ repo_url: repoUrl, name, depth: String(depth) })
@@ -169,17 +194,34 @@ export async function getImpact(repoUrl: string, name: string, filepath?: string
   return res.json()
 }
 
-/** Streams pipeline steps and the answer over SSE. */
+export type AnswerStatus = 'ok' | 'fallback_model' | 'degraded'
+
+export interface FinalAnswer {
+  content: string
+  citations: Citation[]
+  status: AnswerStatus
+}
+
+export interface ChatTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/**
+ * Streams pipeline steps, then the answer token by token, then the final checked answer
+ * (which replaces the streamed text: it differs when a fallback took over).
+ */
 export async function ask(
   question: string,
   repoUrl: string,
-  handlers: { onStep: (e: StepEvent) => void; onToken: (text: string) => void },
+  history: ChatTurn[],
+  handlers: { onStep: (e: StepEvent) => void; onToken: (text: string) => void; onAnswer: (a: FinalAnswer) => void },
   signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch('/api/v1/chat/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, repo_url: repoUrl, stream: true }),
+    body: JSON.stringify({ question, repo_url: repoUrl, stream: true, history }),
     signal,
   })
   if (!res.ok || !res.body) throw new Error(await readError(res))
@@ -199,7 +241,10 @@ export async function ask(
       const msg = JSON.parse(data)
       if (msg.type === 'error') throw new Error(msg.message)
       if (msg.type === 'step') handlers.onStep(msg as StepEvent)
-      if (msg.type === 'token') handlers.onToken(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content))
+      if (msg.type === 'token') handlers.onToken(typeof msg.content === 'string' ? msg.content : '')
+      if (msg.type === 'answer') {
+        handlers.onAnswer({ content: String(msg.content ?? ''), citations: msg.citations ?? [], status: msg.status ?? 'ok' })
+      }
     }
   }
 }

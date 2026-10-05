@@ -22,6 +22,7 @@ x-app: &app
     ENV: production
     GEMINI_API_KEY: ${GEMINI_API_KEY:?set GEMINI_API_KEY in deploy/.env}
     LLM_MODEL: ${LLM_MODEL:-gemini-3.5-flash-lite}
+    LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
     EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
     REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
     QDRANT_HOST: qdrant

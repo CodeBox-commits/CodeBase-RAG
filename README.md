@@ -37,7 +37,7 @@ This project indexes code the way you read it:
 | **Index** | Paste a public GitHub URL and watch it clone, parse, embed, store and link, with live progress for each stage. |
 | **Explore** | Walk the repository as a **code city**: each tower is a function, method or class, as tall as its code is long, standing on its file's plot. Click one to light up its calls, or ask **"What breaks if this changes?"** to light up its whole blast radius (callers, subclasses and overrides, up to 3 hops) with a per-file list. You can switch to a force-directed graph view, filter by file or search by name. |
 | **MCP** | Coding agents (Claude Code, Cursor and others) use the same code intelligence as tools: see [MCP server](#mcp-server). |
-| **Ask** | Ask in plain English. The answer streams in next to a pipeline inspector, where you can open each step and see the plan, the search queries, the ranked hits, the reranker's reordering and the call tree. |
+| **Ask** | Ask in plain English, and follow up ("and what calls it?"). The answer streams in token by token next to a pipeline inspector, where you can open each step and see the plan, the search queries, the ranked hits, the reranker's reordering and the call tree. Every `file:line` citation is a chip marked verified or unverified; click it to open that code. |
 
 ## Architecture
 
@@ -60,7 +60,11 @@ This project indexes code the way you read it:
 5. **Traverse:** Neo4j returns callers, callees, base classes, methods and overrides (same-named methods up and down
    the class hierarchy). The code of up to 6 related symbols the search missed is pulled in too: symbols named in the
    question, overrides of retrieved methods, and direct callees of the top hits.
-6. **Answer:** Gemini writes the answer from that context only, with file-and-line citations. Tokens stream to the UI as Server-Sent Events.
+6. **Answer:** Gemini writes the answer from that context only, with file-and-line citations. Tokens stream to the UI as
+   Server-Sent Events. If the model is rate-limited, `LLM_FALLBACK_MODEL` is tried; with no model at all, the answer
+   lists the retrieved code instead of failing.
+7. **Check citations:** every `path:line` in the answer is matched against what the model was shown: *verified* (the
+   line was in shown code), *graph* (a location from the call graph), or unverified (*wrong line* / *unknown file*).
 
 ## Tech stack
 
@@ -107,6 +111,7 @@ Set these in `backend/.env` (see [`backend/.env.example`](backend/.env.example))
 |---|---|---|
 | `GEMINI_API_KEY` | (required) | Planner and answer model |
 | `LLM_MODEL` | `gemini-3.5-flash-lite` | Gemini model for planning and answers |
+| `LLM_FALLBACK_MODEL` | (unset) | Tried for answers when `LLM_MODEL` is rate-limited or overloaded |
 | `EMBEDDING_PROVIDER` | `local` | `local` (free, offline) or `gemini` (768-d, uses your API quota) |
 | `VECTOR_TOP_K` | `8` | Chunks kept after reranking |
 | `RERANK_CANDIDATES` | `24` | Candidates passed to the reranker |
@@ -126,12 +131,14 @@ means re-indexing.
 | `POST` | `/api/v1/repo/index` | Start indexing a repository; returns a task ID |
 | `GET` | `/api/v1/repo/status/{task_id}` | Stage, progress and result of an indexing task |
 | `GET` | `/api/v1/repo/list` | Every indexed repository with its symbol count |
+| `DELETE` | `/api/v1/repo?repo_url=…` | Remove a repository's vectors, BM25 entries and graph |
 | `GET` | `/api/v1/repo/graph?repo_url=…&limit=…` | Symbols and edges for the Explore page |
 | `POST` | `/api/v1/chat/` | Ask a question; set `"stream": true` for Server-Sent Events |
 | `GET` | `/api/v1/symbols/definitions?repo_url=…&name=…` | Every symbol with that name: location, class, bases, overrides, direct calls and callers |
 | `GET` | `/api/v1/symbols/callers?repo_url=…&name=…&depth=1-5` | Who calls this symbol, up to `depth` hops back |
 | `GET` | `/api/v1/symbols/callees?repo_url=…&name=…&depth=1-5` | What this symbol calls, up to `depth` hops forward |
 | `GET` | `/api/v1/symbols/impact?repo_url=…&name=…&depth=1-5` | Blast radius: everything that calls, subclasses or overrides it, grouped by file |
+| `GET` | `/api/v1/symbols/at?repo_url=…&filepath=…&line=…` | The function, method or class containing that line, with its code |
 | `POST` | `/mcp` | MCP server (streamable HTTP) |
 | `GET` | `/health` | Liveness: the process is up |
 | `GET` | `/ready` | Readiness: Neo4j, Qdrant and Redis respond |
@@ -154,9 +161,10 @@ claude mcp add --transport http codebox http://localhost:8000/mcp
 | `search_code` | Hybrid vector + BM25 search, reranked, with each hit's code |
 | `find_definition` | Location, class, bases, subclasses, overrides, direct calls and callers |
 | `get_symbol_code` | A symbol's full source |
+| `get_code_at` | The symbol containing a `file:line`, with its code (to check a citation) |
 | `find_callers` / `find_callees` | Call graph neighbours up to 5 hops away |
 | `impact_of` | Blast radius of changing a symbol, grouped by file |
-| `ask_codebase` | A cited answer from the full RAG pipeline (uses Gemini quota) |
+| `ask_codebase` | A cited answer from the full RAG pipeline, each citation with its check status (uses Gemini quota) |
 
 All tools except `ask_codebase` are exact graph or search lookups: no LLM calls, no quota.
 The server is stateless and returns plain JSON. It only answers requests whose `Host` is in
@@ -190,7 +198,7 @@ Frontend checks:
 
 ```bash
 cd frontend
-npx tsc -b && npx oxlint && npm run build
+npx tsc -b && npx oxlint && npm test && npm run build
 ```
 
 CI runs all of these on every pull request, plus a Docker build, deploy-config

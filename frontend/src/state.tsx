@@ -1,11 +1,15 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { getStatus, listRepos, startIndex, type IndexResult, type IngestProgress, type StepEvent } from './api'
+import { deleteRepo, getStatus, listRepos, startIndex, type AnswerStatus, type IndexResult, type IngestProgress, type StepEvent } from './api'
+import type { Citation } from './citations'
+import { mergeServerRepos } from './repoList'
 import { load, save } from './storage'
 
 export type RepoState = 'indexing' | 'ready' | 'failed'
 
 export interface Repo {
   url: string
+  /** Indexed symbol count as reported by the server. */
+  symbols?: number
   taskId?: string
   state: RepoState
   stage?: string
@@ -25,6 +29,8 @@ export interface Message {
   trace?: StepEvent[]
   startedAt?: number
   finishedAt?: number
+  citations?: Citation[]
+  status?: AnswerStatus
 }
 
 interface RepoContextValue {
@@ -32,7 +38,8 @@ interface RepoContextValue {
   active: Repo | null
   setActive: (url: string) => void
   index: (url: string) => Promise<Repo>
-  remove: (url: string) => void
+  /** Deletes the repository's index on the server, then forgets it here. */
+  remove: (url: string) => Promise<void>
   chats: Record<string, Message[]>
   updateChat: (url: string, fn: (m: Message[]) => Message[]) => void
 }
@@ -66,13 +73,7 @@ export function RepoProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     listRepos()
       .then((server) => {
-        setRepos((rs) => {
-          const known = new Set(rs.map((r) => r.url))
-          const added: Repo[] = server
-            .filter((s) => !known.has(s.url))
-            .map((s) => ({ url: s.url, state: 'ready', indexedAt: s.last_indexed ?? undefined }))
-          return added.length ? [...rs, ...added] : rs
-        })
+        setRepos((rs) => mergeServerRepos(rs, server))
         setActiveUrl((cur) => cur ?? server[0]?.url ?? null)
       })
       .catch(() => { /* offline or old backend: the local list still works */ })
@@ -112,7 +113,8 @@ export function RepoProvider({ children }: { children: ReactNode }) {
     return repo
   }
 
-  function remove(url: string) {
+  async function remove(url: string) {
+    await deleteRepo(url)
     setRepos((rs) => rs.filter((r) => r.url !== url))
     setChats(({ [url]: _, ...rest }) => rest)
     if (activeUrl === url) setActiveUrl(null)

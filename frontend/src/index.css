@@ -457,6 +457,32 @@ code, .mono { font-family: var(--mono); font-size: 0.88em; }
 .md pre code { background: none; border: 0; padding: 0; color: #ddd7f0; }
 .md table { border-collapse: collapse; } .md th, .md td { border: 1px solid var(--rule); padding: 4px 8px; }
 .md ul, .md ol { padding-left: 22px; }
+
+/* Citations: chips checked against the context the model saw. */
+.md .cite { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 12px; line-height: 1.4; padding: 0 6px; border-radius: 3px; border: 1px solid var(--rule); background: var(--ink); color: #d4c2ff; cursor: pointer; vertical-align: baseline; }
+.md .cite:hover { border-color: var(--lit); }
+.cite-mark { font-size: 10px; font-weight: 700; }
+.cite-verified .cite-mark { color: var(--ok); }
+.cite-graph .cite-mark { color: var(--cyan); }
+.md .cite-wrong_line, .md .cite-unknown_file { border-color: color-mix(in srgb, var(--warn) 55%, var(--rule)); }
+.cite-wrong_line .cite-mark, .cite-unknown_file .cite-mark { color: var(--warn); }
+.cite-pending .cite-mark { color: var(--fog); }
+.cite-summary { font-size: 12px; color: var(--fog); margin: 10px 0 0; }
+.cite-summary.warn b { color: var(--warn); }
+.answer-note { font-size: 12px; color: var(--warn); margin: 0 0 8px; }
+.msg.degraded { border-left-color: var(--warn); }
+
+.code-viewer { position: fixed; z-index: 40; top: 72px; right: 16px; bottom: 16px; width: min(640px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: var(--ink-2); border: 1px solid var(--rule); border-radius: var(--r); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); animation: fadeUp 0.2s var(--ease); }
+.code-viewer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.code-viewer-head code { font-size: 13px; color: var(--paper); word-break: break-all; }
+.cite-note { font-size: 12.5px; margin: 0; padding: 6px 10px; border-radius: var(--r-sm); background: var(--ink); border: 1px solid var(--rule-soft); }
+.cite-note.cite-verified { color: var(--ok); }
+.cite-note.cite-graph { color: var(--cyan); }
+.cite-note.cite-wrong_line, .cite-note.cite-unknown_file { color: var(--warn); }
+.code-lines { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 8px 0; background: var(--ink); border: 1px solid var(--rule); border-radius: var(--r-sm); font-family: var(--mono); font-size: 12px; line-height: 1.55; color: #ddd7f0; }
+.code-lines > div { padding: 0 12px 0 0; white-space: pre; }
+.code-lines > div.hit { background: var(--lit-soft); box-shadow: inset 2px 0 0 var(--lit); }
+.code-lines .ln { display: inline-block; width: 48px; padding-right: 12px; text-align: right; color: var(--fog); opacity: 0.6; user-select: none; }
 .composer { display: flex; gap: 8px; align-items: flex-end; padding-top: 12px; border-top: 1px solid var(--rule); }
 .composer textarea { flex: 1; resize: none; min-height: 48px; max-height: 180px; field-sizing: content; font: inherit; font-size: 15px; color: var(--paper);
   background: var(--ink); border: 1px solid var(--rule); border-radius: var(--r-sm); padding: 12px 14px; }
