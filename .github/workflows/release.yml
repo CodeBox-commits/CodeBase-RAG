@@ -39,7 +39,7 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
       # For workflow_run, build the exact commit CI tested, not whatever main points to now.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
@@ -111,7 +111,7 @@ jobs:
     permissions:
       contents: write # create the release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create release with generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
