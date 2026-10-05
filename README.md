@@ -227,7 +227,7 @@ backups and restore.
 
 - Python, JavaScript and TypeScript only. Adding a language is one `Language` subclass
   in `backend/app/core/languages/` plus one line in its registry.
-- JS/TS object-literal methods (`{ foo() {} }`) and imports aliased with `as` aren't linked yet;
-  two object-literal methods with the same name in one function share a graph node.
+- Default imports (`import x from './m'`) aren't mapped to the exported name; named, namespace
+  and `require` imports are. Same-named definitions in one file are kept apart as `name`, `name#2`.
 - Public repositories only (cloned without credentials).
 - Calls resolved through dynamic dispatch or external libraries aren't linked in the graph.

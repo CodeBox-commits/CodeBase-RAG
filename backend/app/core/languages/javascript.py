@@ -14,7 +14,7 @@ import tree_sitter_typescript
 from tree_sitter import Language as Grammar
 from tree_sitter import Node, Parser
 
-from app.core.languages.base import Language
+from app.core.languages.base import Language, unalias
 from app.core.schemas import ExtractedChunk
 
 ChunkType = Literal["function", "method", "class"]
@@ -62,11 +62,65 @@ def _reference_name(node: Node | None) -> str | None:
     return None
 
 
+def _string_value(node: Node | None) -> str | None:
+    if node is None or node.type != "string":
+        return None
+    return "".join(_text(c) for c in node.named_children if c.type == "string_fragment") or None
+
+
+def _require_source(node: Node | None) -> str | None:
+    """'./m' for `require('./m')`, else None."""
+    if node is None or node.type != "call_expression":
+        return None
+    fn, args = node.child_by_field_name("function"), node.child_by_field_name("arguments")
+    if fn is None or _text(fn) != "require" or args is None or not args.named_children:
+        return None
+    return _string_value(args.named_children[0])
+
+
+def import_aliases(root: Node, module_name: Callable[[str], str]) -> dict[str, str]:
+    """Local names bound by imports, mapped to what they stand for (top-level statements only).
+
+    import { sign as s } from './signer'   -> {"s": "sign"}
+    import * as u from './utils/index.js'  -> {"u": "utils"}   (module name, as files are matched)
+    const u = require('./utils')           -> {"u": "utils"}
+    const { check: c } = require('./utils') -> {"c": "check"}
+    """
+    aliases: dict[str, str] = {}
+    for stmt in root.named_children:
+        if stmt.type == "import_statement":
+            source = _string_value(stmt.child_by_field_name("source"))
+            for clause in (c for c in stmt.named_children if c.type == "import_clause"):
+                for part in clause.named_children:
+                    if part.type == "named_imports":
+                        for spec in part.named_children:
+                            name, alias = spec.child_by_field_name("name"), spec.child_by_field_name("alias")
+                            if name is not None and alias is not None:
+                                aliases[_text(alias)] = _text(name)
+                    elif part.type == "namespace_import" and part.named_children and source:
+                        aliases[_text(part.named_children[0])] = module_name(source)
+        elif stmt.type in ("lexical_declaration", "variable_declaration"):
+            for decl in stmt.named_children:
+                source = _require_source(decl.child_by_field_name("value"))
+                target = decl.child_by_field_name("name")
+                if source is None or target is None:
+                    continue
+                if target.type == "identifier":
+                    aliases[_text(target)] = module_name(source)
+                elif target.type == "object_pattern":
+                    for pair in (p for p in target.named_children if p.type == "pair_pattern"):
+                        key, value = pair.child_by_field_name("key"), pair.child_by_field_name("value")
+                        if key is not None and value is not None and value.type == "identifier":
+                            aliases[_text(value)] = _text(key)
+    return aliases
+
+
 class _Walker:
-    def __init__(self, file_path: str, language: str, source: str):
+    def __init__(self, file_path: str, language: str, source: str, aliases: dict[str, str] | None = None):
         self.file_path = file_path
         self.language = language
         self.lines = source.splitlines()
+        self.aliases = aliases or {}
         self.chunks: list[ExtractedChunk] = []
 
     def definition(self, node: Node, in_class: bool) -> _Definition | None:
@@ -83,9 +137,20 @@ class _Walker:
             )
 
         if node.type == "method_definition":
-            return _Definition(
-                _text(node.child_by_field_name("name")), "method", node, node.child_by_field_name("body")
-            )
+            # In a class body a method; in an object literal (`{ foo() {} }`) a plain function.
+            kind: ChunkType = "method" if in_class else "function"
+            return _Definition(_text(node.child_by_field_name("name")), kind, node, node.child_by_field_name("body"))
+
+        if node.type == "pair":
+            # `{ handler: () => {...} }` / `{ handler: function () {...} }`
+            value, key = node.child_by_field_name("value"), node.child_by_field_name("key")
+            if (
+                value is not None
+                and value.type in _FUNCTION_VALUES
+                and key is not None
+                and key.type == "property_identifier"
+            ):
+                return _Definition(_text(key), "function", node, value.child_by_field_name("body"))
 
         if node.type in _FIELD_NODES and in_class:
             # `handle = () => {...}` inside a class body behaves like a method.
@@ -117,7 +182,19 @@ class _Walker:
             if found is not None and found.name:
                 self.emit(found, scope)
                 scope = (*scope, (found.name, "class" if found.kind == "class" else "function"))
+            elif (namespace := self.object_name(node)) is not None:
+                # `const api = { get() {} }`: members are `api.get`, which is how callers write them.
+                scope = (*scope, (namespace, "object"))
             stack.extend((child, scope) for child in reversed(node.named_children))
+
+    @staticmethod
+    def object_name(node: Node) -> str | None:
+        if node.type != "variable_declarator":
+            return None
+        name, value = node.child_by_field_name("name"), node.child_by_field_name("value")
+        if name is None or value is None or name.type != "identifier" or value.type != "object":
+            return None
+        return _text(name)
 
     def emit(self, d: _Definition, scope: tuple[tuple[str, str], ...]) -> None:
         start = d.node.start_point.row + 1
@@ -161,11 +238,11 @@ class _Walker:
                 name = _reference_name(node.child_by_field_name("function"))
                 if name:
                     # A bare `super(...)` in a constructor calls the base class constructor.
-                    found.add("super.constructor" if name == "super" else name)
+                    found.add("super.constructor" if name == "super" else unalias(name, self.aliases))
             elif node.type == "new_expression":
                 name = _reference_name(node.child_by_field_name("constructor"))
                 if name:
-                    found.add(name)
+                    found.add(unalias(name, self.aliases))
             for child in node.named_children:
                 # Named nested definitions are their own chunks; anonymous callbacks
                 # (`items.map(x => f(x))`) belong to the enclosing function.
@@ -173,8 +250,7 @@ class _Walker:
                     stack.append(child)
         return sorted(found)
 
-    @staticmethod
-    def bases(class_node: Node) -> list[str]:
+    def bases(self, class_node: Node) -> list[str]:
         bases: list[str] = []
         for heritage in (c for c in class_node.named_children if c.type == "class_heritage"):
             for clause in heritage.named_children:
@@ -184,7 +260,7 @@ class _Walker:
                 target = clause.child_by_field_name("value") if clause.type == "extends_clause" else clause
                 name = _reference_name(target)
                 if name:
-                    bases.append(name)
+                    bases.append(unalias(name, self.aliases))
         return bases
 
     @staticmethod
@@ -220,12 +296,12 @@ class _TreeSitterLanguage(Language):
         name = path.name
         return name.endswith(_SKIP_SUFFIXES) or any(marker in name for marker in _TEST_MARKERS)
 
-    def parse(self, file_path: str, source: str) -> list[ExtractedChunk]:
+    def _parse(self, file_path: str, source: str) -> list[ExtractedChunk]:
         if not source.strip() or len(source) > _MAX_FILE_BYTES:
             return []
         suffix = PurePosixPath(file_path).suffix
         tree = self._parser(suffix).parse(source.encode("utf-8"))
-        walker = _Walker(file_path, self.name, source)
+        walker = _Walker(file_path, self.name, source, import_aliases(tree.root_node, self.module_name))
         walker.walk(tree.root_node)
         return walker.chunks
 
