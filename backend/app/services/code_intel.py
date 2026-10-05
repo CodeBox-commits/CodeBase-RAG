@@ -42,6 +42,21 @@ def list_repositories() -> list[dict[str, Any]]:
     return graph_db.list_repositories()
 
 
+def delete_repository(repo_url: str) -> bool:
+    """Removes a repository from all three stores. False if it was never indexed."""
+    # Imported here: vector_db pulls in the Qdrant client, which the read paths don't need.
+    from app.services.lexical_db import lexical_db as lexical
+    from app.services.vector_db import vector_db
+
+    graph_db.connect()
+    if not any(r["url"] == repo_url for r in graph_db.list_repositories()):
+        return False
+    graph_db.delete_repository_data(repo_url)
+    vector_db.delete_repository(repo_url)
+    lexical.delete_repository(repo_url)
+    return True
+
+
 def find_definitions(repo_url: str, name: str) -> list[dict[str, Any]]:
     """Every symbol called `name`, with its class, bases, overrides and direct calls/callers."""
     graph_db.connect()

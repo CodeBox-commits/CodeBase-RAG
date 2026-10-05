@@ -167,3 +167,39 @@ def test_impact_is_formatted_for_the_prompt(graph):
         "- Cart.checkout (cart.py:10) calls apply_discount, 2 hops away",
         "- ... and 1 more",
     ]
+
+
+# --- deleting a repository -------------------------------------------------------------
+
+
+def test_delete_endpoint_clears_all_three_stores(monkeypatch):
+    from app.services import lexical_db as lexical_module
+    from app.services import vector_db as vector_module
+
+    deleted = []
+
+    class Graph:
+        def connect(self):
+            pass
+
+        def list_repositories(self):
+            return [{"url": "https://github.com/a/b"}]
+
+        def delete_repository_data(self, url):
+            deleted.append(("graph", url))
+
+    monkeypatch.setattr(code_intel, "graph_db", Graph())
+    monkeypatch.setattr(vector_module.vector_db, "delete_repository", lambda url: deleted.append(("vectors", url)))
+    monkeypatch.setattr(lexical_module.lexical_db, "delete_repository", lambda url: deleted.append(("bm25", url)))
+
+    client = TestClient(app)
+    res = client.delete("/api/v1/repo", params={"repo_url": "https://github.com/a/b.git"})
+    assert res.status_code == 200 and res.json() == {"deleted": "https://github.com/a/b"}
+    assert deleted == [
+        ("graph", "https://github.com/a/b"),
+        ("vectors", "https://github.com/a/b"),
+        ("bm25", "https://github.com/a/b"),
+    ]
+
+    assert client.delete("/api/v1/repo", params={"repo_url": "https://github.com/x/y"}).status_code == 404
+    assert len(deleted) == 3  # nothing touched for an unknown repository
