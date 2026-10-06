@@ -64,10 +64,21 @@ Examples:
    queries=["repository indexing error handling", "ingestion failure exception"]
 
 
-USER QUESTION:
+{history}USER QUESTION:
 
 {question}
 """
+
+_HISTORY = """CONVERSATION SO FAR (oldest first). The question may refer back to it ("it", "that
+function", "its callers"): resolve those references, and put the resolved symbol names in
+`symbols` and `queries`. Classify and plan the NEW question only.
+
+{turns}
+
+"""
+
+# Earlier turns only need to identify what's being talked about.
+_TURN_CHARS = 500
 
 
 class QueryPlanner:
@@ -76,10 +87,22 @@ class QueryPlanner:
     def __init__(self, llm: ChatGoogleGenerativeAI):
         self.structured_llm = llm.with_structured_output(QueryPlan)
 
-    def plan(self, question: str) -> QueryPlan:
+    def plan(self, question: str, history: list[dict[str, str]] | None = None) -> QueryPlan:
         # Errors propagate so the agent node can record them and fall back.
-        result = self.structured_llm.invoke(_PROMPT.format(question=question))
+        result = self.structured_llm.invoke(_PROMPT.format(question=question, history=format_history(history)))
         # with_structured_output(QueryPlan) returns a QueryPlan; dicts only appear with include_raw.
         if not isinstance(result, QueryPlan):
             result = QueryPlan.model_validate(result)
         return result
+
+
+def format_history(history: list[dict[str, str]] | None, max_chars: int = _TURN_CHARS) -> str:
+    if not history:
+        return ""
+    turns = []
+    for turn in history:
+        text = " ".join((turn.get("content") or "").split())
+        if len(text) > max_chars:
+            text = text[:max_chars] + "..."
+        turns.append(f"{'User' if turn.get('role') == 'user' else 'Assistant'}: {text}")
+    return _HISTORY.format(turns="\n".join(turns))

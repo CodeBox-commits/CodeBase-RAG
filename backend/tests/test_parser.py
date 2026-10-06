@@ -104,3 +104,25 @@ class Signer:
     chunks = [c for c in parse_source("signer.py", source) if c.qualified_name == "Signer.unsign"]
     assert len(chunks) == 1
     assert chunks[0].start_line == 10 and chunks[0].calls == ["self.verify"]
+
+
+def test_python_import_aliases_and_duplicate_names():
+    source = """
+import numpy as np
+from app.utils import format_name as fmt
+import app.models as m
+
+class Box(m.Base):
+    @property
+    def size(self):
+        return fmt(np.ones(3))
+
+    @size.setter
+    def size(self, value):
+        self._size = value
+"""
+    chunks = {c.qualified_name: c for c in parse_source("app/box.py", source)}
+    assert chunks["Box"].bases == ["models.Base"]
+    assert chunks["Box.size"].calls == ["format_name", "numpy.ones", "property"]
+    # The setter shares the getter's name: it gets its own node instead of merging into it.
+    assert "Box.size#2" in chunks and chunks["Box.size#2"].start_line > chunks["Box.size"].start_line

@@ -185,6 +185,14 @@ def test_impact_follows_callers_subclasses_and_overrides(indexed_repo):
     assert code_intel.impact(repo_url, "nope") is None
 
 
+def test_code_at_returns_the_innermost_symbol(indexed_repo):
+    repo_url, _ = indexed_repo
+    method = code_intel.code_at(repo_url, "shop/cart.py", 17)  # inside GiftCart.checkout
+    assert method["name"] == "GiftCart.checkout" and "percent + 5" in method["code"]
+    assert code_intel.code_at(repo_url, "shop/cart.py", 5)["name"] == "Cart"  # class docstring
+    assert code_intel.code_at(repo_url, "shop/cart.py", 2) is None  # module-level import
+
+
 def test_indexed_repository_is_listed(indexed_repo):
     repo_url, result = indexed_repo
     [row] = [r for r in code_intel.list_repositories() if r["url"] == repo_url]

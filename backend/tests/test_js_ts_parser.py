@@ -138,3 +138,69 @@ def test_cross_file_resolution_for_typescript():
     assert (("src/signer.ts", "Signer"), ("src/signer.ts", "Signer.sign")) in rel.has_method
     # super.sign() in the subclass reaches the base class's method
     assert (("src/signer.ts", "TimedSigner.sign"), ("src/signer.ts", "Signer.sign")) in rel.calls
+
+
+# --- linking gaps: object literals, import aliases, duplicate names ------------------
+
+
+def test_object_literal_members_are_scoped_by_the_object_name():
+    source = """
+const api = {
+  get(url) { return request(url); },
+  post: (url) => request(url),
+  remove: function (url) { return api.get(url); },
+};
+module.exports = { helper() {} };
+"""
+    chunks = _by_qname("src/api.js", source)
+    assert {q: c.type for q, c in chunks.items()} == {
+        "api.get": "function",
+        "api.post": "function",
+        "api.remove": "function",
+        "helper": "function",  # module.exports members keep their own name
+    }
+    assert chunks["api.remove"].calls == ["api.get"]
+
+
+def test_import_aliases_are_resolved_in_calls_and_bases():
+    source = """
+import { sign as s, Base as B } from './signer';
+import * as u from './utils/index.js';
+const fmt = require('./format');
+const { check: c } = require('./checks');
+
+export class Token extends B {
+  issue() { return s(u.now()) + fmt.pad(c()); }
+}
+"""
+    chunks = _by_qname("src/token.ts", source)
+    assert chunks["Token"].bases == ["Base"]
+    assert chunks["Token.issue"].calls == ["check", "format.pad", "sign", "utils.now"]
+
+
+def test_same_named_definitions_get_unique_qualified_names():
+    source = """
+function copy(res) {
+  const a = { async value() { return res.text(); } };
+  const b = { value() { return res.body; } };
+  return [a, b];
+}
+"""
+    chunks = parse_source("src/body.ts", source)
+    assert [c.qualified_name for c in chunks] == ["copy", "copy.a.value", "copy.b.value"]
+
+    anonymous = "function f() { return [{ value() {} }, { value() {} }]; }"
+    assert [c.qualified_name for c in parse_source("x.js", anonymous)] == ["f", "f.value", "f.value#2"]
+
+
+def test_aliased_calls_resolve_across_files():
+    files = {
+        "src/signer.ts": "export function sign(v) { return v; }",
+        "src/utils/index.ts": "export function now() { return 1; }",
+        "src/token.ts": "import { sign as s } from './signer';\nimport * as u from './utils';\n"
+        "export function issue() { return s(u.now()); }",
+    }
+    chunks = [c for path, src in files.items() for c in parse_source(path, src)]
+    rel = resolve_relationships(chunks)
+    assert (("src/token.ts", "issue"), ("src/signer.ts", "sign")) in rel.calls
+    assert (("src/token.ts", "issue"), ("src/utils/index.ts", "now")) in rel.calls

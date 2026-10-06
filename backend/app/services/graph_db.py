@@ -131,6 +131,16 @@ RETURN f.filepath AS via_filepath, f.name AS via_name,
 ORDER BY via_filepath, via_name, CASE relation WHEN "OVERRIDES" THEN 0 ELSE 1 END, relation, filepath, name
 """
 
+# The innermost symbol containing a line: a method rather than its class.
+_SYMBOL_AT_QUERY = """
+MATCH (n:Symbol {repo_url: $repo_url, filepath: $filepath})
+WHERE n.start_line <= $line AND $line <= n.end_line
+RETURN n.qualified_name AS name, n.filepath AS filepath, n.start_line AS start_line,
+       n.end_line AS end_line, n.type AS type
+ORDER BY n.end_line - n.start_line
+LIMIT 1
+"""
+
 _REPOSITORIES_QUERY = """
 MATCH (r:Repository)
 RETURN r.url AS url, r.last_indexed AS last_indexed,
@@ -345,6 +355,11 @@ class Neo4jService:
         with self._require_driver().session() as session:
             result = session.run(_DEPENDENTS_QUERY, repo_url=repo_url, frontier=frontier, with_overrides=with_overrides)
             return [record.data() for record in result]
+
+    def symbol_at(self, repo_url: str, filepath: str, line: int) -> dict[str, Any] | None:
+        with self._require_driver().session() as session:
+            record = session.run(_SYMBOL_AT_QUERY, repo_url=repo_url, filepath=filepath, line=line).single()
+            return record.data() if record else None
 
     def list_repositories(self) -> list[dict[str, Any]]:
         with self._require_driver().session() as session:

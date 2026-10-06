@@ -3,6 +3,7 @@ from typing import Any
 from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, HttpUrl
+from starlette.concurrency import run_in_threadpool
 
 from app.core.urls import normalize_repo_url
 from app.services import code_intel
@@ -49,6 +50,19 @@ async def get_task_status(task_id: str):
         response["error"] = str(task_result.info)
 
     return response
+
+
+@router.delete("")
+async def delete_repository(repo_url: str = Query(..., description="Repository URL as used for indexing")):
+    """Deletes a repository's vectors, BM25 entries and call graph. Re-index to bring it back."""
+    url = normalize_repo_url(repo_url)
+    try:
+        deleted = await run_in_threadpool(code_intel.delete_repository, url)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Could not delete {url}: {e}") from e
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"{url} is not indexed")
+    return {"deleted": url}
 
 
 @router.get("/list")

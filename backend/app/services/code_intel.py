@@ -42,6 +42,21 @@ def list_repositories() -> list[dict[str, Any]]:
     return graph_db.list_repositories()
 
 
+def delete_repository(repo_url: str) -> bool:
+    """Removes a repository from all three stores. False if it was never indexed."""
+    # Imported here: vector_db pulls in the Qdrant client, which the read paths don't need.
+    from app.services.lexical_db import lexical_db as lexical
+    from app.services.vector_db import vector_db
+
+    graph_db.connect()
+    if not any(r["url"] == repo_url for r in graph_db.list_repositories()):
+        return False
+    graph_db.delete_repository_data(repo_url)
+    vector_db.delete_repository(repo_url)
+    lexical.delete_repository(repo_url)
+    return True
+
+
 def find_definitions(repo_url: str, name: str) -> list[dict[str, Any]]:
     """Every symbol called `name`, with its class, bases, overrides and direct calls/callers."""
     graph_db.connect()
@@ -54,6 +69,17 @@ def get_symbol_code(repo_url: str, name: str, filepath: str | None = None) -> li
     targets = graph_db.find_symbols(repo_url, name, filepath=filepath)
     refs = [{"filepath": t["filepath"], "symbol": t["name"], "start_line": t["start_line"]} for t in targets]
     return lexical_db.get_chunks(repo_url, refs)
+
+
+def code_at(repo_url: str, filepath: str, line: int) -> dict[str, Any] | None:
+    """The indexed symbol containing `filepath:line`, with its code (what a citation points at)."""
+    graph_db.connect()
+    symbol = graph_db.symbol_at(repo_url, filepath, line)
+    if symbol is None:
+        return None
+    ref = {"filepath": symbol["filepath"], "symbol": symbol["name"], "start_line": symbol["start_line"]}
+    chunks = lexical_db.get_chunks(repo_url, [ref])
+    return {**symbol, "code": chunks[0]["code_text"] if chunks else None}
 
 
 def call_neighbours(

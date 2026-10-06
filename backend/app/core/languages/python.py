@@ -8,17 +8,34 @@ from app.core.schemas import ExtractedChunk
 _DEFINITION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
+def import_aliases(tree: ast.AST) -> dict[str, str]:
+    """Names bound by `as` imports, mapped to what they stand for.
+
+    `from m import a as b` -> {"b": "a"}; `import pkg.mod as m` -> {"m": "mod"} (the
+    module's own name, which the resolver matches against file names).
+    """
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            aliases.update({a.asname: a.name for a in node.names if a.asname and a.name != "*"})
+        elif isinstance(node, ast.Import):
+            aliases.update({a.asname: a.name.rsplit(".", 1)[-1] for a in node.names if a.asname})
+    return aliases
+
+
 class RepositoryASTVisitor(ast.NodeVisitor):
-    def __init__(self, file_path: str, source_lines: list[str]):
+    def __init__(self, file_path: str, source_lines: list[str], aliases: dict[str, str] | None = None):
         self.file_path = file_path
         self.source_lines = source_lines
+        self.aliases = aliases or {}
         self.chunks: list[ExtractedChunk] = []
         # Enclosing definitions as (name, kind) pairs, kind being "class" or "function".
         self._scope: list[tuple[str, str]] = []
 
     def _resolve_ast_name(self, node: ast.AST) -> str | None:
         if isinstance(node, ast.Name):
-            return node.id
+            # The head of every dotted reference: where an import alias would appear.
+            return self.aliases.get(node.id, node.id)
         elif isinstance(node, ast.Attribute):
             prefix = self._resolve_ast_name(node.value)
             return f"{prefix}.{node.attr}" if prefix else node.attr
@@ -146,7 +163,7 @@ class PythonLanguage(Language):
     def should_skip(self, path: PurePosixPath) -> bool:
         return path.name.startswith("test_") or path.name.endswith("_test.py")
 
-    def parse(self, file_path: str, source: str) -> list[ExtractedChunk]:
+    def _parse(self, file_path: str, source: str) -> list[ExtractedChunk]:
         if not source.strip():
             return []
 
@@ -155,6 +172,6 @@ class PythonLanguage(Language):
         except (SyntaxError, ValueError):
             return []
 
-        visitor = RepositoryASTVisitor(file_path, source.splitlines())
+        visitor = RepositoryASTVisitor(file_path, source.splitlines(), import_aliases(syntax_tree))
         visitor.visit(syntax_tree)
         return visitor.chunks

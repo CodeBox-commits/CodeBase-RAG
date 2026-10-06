@@ -69,6 +69,19 @@ export default function IndexPage() {
   const [busy, setBusy] = useState(false)
   const current = stageIndex(active)
 
+  async function removeRepo(target: string) {
+    const ok = window.confirm(
+      `Delete ${repoName(target)} from the index?\n\nThis removes its vectors, search entries and call graph for everyone using this server. You can index it again later.`,
+    )
+    if (!ok) return
+    setError('')
+    try {
+      await remove(target)
+    } catch (e) {
+      setError(`Couldn't delete ${repoName(target)}: ${(e as Error).message}`)
+    }
+  }
+
   async function submit(target: string) {
     setError('')
     setBusy(true)
@@ -186,13 +199,21 @@ export default function IndexPage() {
                   <span className="repo-card-text">
                     <strong>{repoName(r.url)}</strong>
                     <span>
-                      {r.state === 'ready' && `${r.result?.symbols ?? '?'} symbols, ${r.result?.call_edges ?? '?'} calls`}
+                      {r.state === 'ready' && (r.result
+                        ? `${r.result.symbols} symbols, ${r.result.call_edges} calls`
+                        : `${r.symbols ?? '?'} symbols`)}
                       {r.state === 'indexing' && (INGEST_STAGES.find((s) => s.key === r.stage)?.label ?? 'Queued')}
                       {r.state === 'failed' && 'Failed'}
                     </span>
                   </span>
                 </button>
-                <button className="icon" aria-label={`Remove ${repoName(r.url)}`} onClick={() => remove(r.url)}>×</button>
+                <button
+                  className="icon"
+                  aria-label={`Delete ${repoName(r.url)} from the index`}
+                  title="Delete from the index"
+                  disabled={r.state === 'indexing'}
+                  onClick={() => removeRepo(r.url)}
+                >×</button>
               </li>
             ))}
           </ul>
