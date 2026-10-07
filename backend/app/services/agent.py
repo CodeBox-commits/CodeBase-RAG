@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
@@ -55,6 +56,11 @@ class AgentConfig:
     # Follow-up questions: how many earlier messages the planner and the answer prompt see.
     history_messages: int = 6
     history_answer_chars: int = 1200
+    # Ask-for-more: how many times the model may request missing code before it must answer,
+    # how many items one request may name, and how many chunks each item brings back.
+    followup_rounds: int = 1
+    followup_max_items: int = 5
+    followup_chunks_per_item: int = 2
 
     @classmethod
     def from_env(cls) -> "AgentConfig":
@@ -76,6 +82,7 @@ class AgentConfig:
             graph_expand_limit=int(os.getenv("GRAPH_EXPAND_LIMIT", "6")),
             max_output_tokens=int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "2048")),
             llm_fallback_model=os.getenv("LLM_FALLBACK_MODEL") or None,
+            followup_rounds=int(os.getenv("AGENT_FOLLOWUP_ROUNDS", "1")),
         )
 
 
@@ -88,6 +95,8 @@ class AgentResult(TypedDict):
     citations: list[dict[str, Any]]
     # ok | fallback_model (main model unavailable) | degraded (no model: retrieved code listed)
     status: AnswerStatus
+    # Ask-for-more rounds: what the model requested and what was found for it.
+    followups: list[dict[str, Any]]
 
 
 class AgentState(TypedDict):
@@ -112,6 +121,11 @@ class AgentState(TypedDict):
     answer: str
     citations: list[dict[str, Any]]
     answer_status: AnswerStatus
+    # Ask-for-more: allowed for this question, rounds used, items pending, history of rounds.
+    allow_followup: bool
+    followup_round: int
+    requested: list[str]
+    followups: list[dict[str, Any]]
 
 
 class CodeAgent:
@@ -154,6 +168,7 @@ class CodeAgent:
         graph.add_node("rerank", self.node_rerank)
         graph.add_node("graph_search", self.node_graph_search)
         graph.add_node("generate_response", self.node_generate_response)
+        graph.add_node("fetch_more", self.node_fetch_more)
 
         graph.set_entry_point("query_planner")
 
@@ -165,7 +180,13 @@ class CodeAgent:
         # direct callees. The strategy only decides how deep it walks.
         graph.add_edge("rerank", "graph_search")
         graph.add_edge("graph_search", "generate_response")
-        graph.add_edge("generate_response", END)
+        # Ask-for-more: a draft that names missing code goes round once more with it.
+        graph.add_conditional_edges(
+            "generate_response",
+            lambda state: "fetch_more" if state.get("requested") else END,
+            {"fetch_more": "fetch_more", END: END},
+        )
+        graph.add_edge("fetch_more", "generate_response")
 
         return graph.compile()
 
@@ -436,6 +457,7 @@ class CodeAgent:
         impact_text = self._format_impact(state.get("impact_results", []))
 
         history = state.get("history") or []
+        can_ask = self._can_ask_for_more(state)
         system_prompt = (
             "You are a senior software engineer acting as a code assistant for a specific "
             "repository. You answer using ONLY the context provided below (vector-retrieved "
@@ -460,6 +482,14 @@ class CodeAgent:
             "'it' or 'that' refers to, but cite only from the context below.\n"
             "7. Prefer concise, technically precise answers over padded explanations. Use "
             "bullet points or short code blocks where they aid clarity."
+        ) + (
+            "\n8. If answering correctly needs code that is NOT in the context (for example a "
+            "function that is called but not shown), do not guess. Reply with exactly one line, "
+            "`NEED: <name>, <name>`, naming up to "
+            f"{self.config.followup_max_items} functions, classes, methods or file paths, and "
+            "nothing else. You can ask once; the code is then added and you answer."
+            if can_ask
+            else ""
         )
 
         context_note = ""
@@ -485,6 +515,16 @@ class CodeAgent:
         answer, status, failure = self._generate(system_prompt, user_content)
         if answer is None:
             answer = self._degraded_answer(failure, vector_results, expanded_results)
+        elif (requested := self.parse_request(answer, self.config.followup_max_items)) is not None:
+            if can_ask and requested:
+                logger.info("Model asked for more context: %s", requested)
+                return {"requested": requested, "answer": ""}
+            # Asked anyway on the last round: tell the user what was missing instead.
+            answer = (
+                "The retrieved context wasn't enough to answer this reliably. It would need: "
+                + ", ".join(f"`{r}`" for r in requested)
+                + ". Try asking about those directly."
+            )
 
         spans = [
             *citation_check.snippet_spans(vector_results, self.config.snippet_max_lines),
@@ -495,7 +535,85 @@ class CodeAgent:
         summary = citation_check.summarize(citations)
         if summary["total"] - summary["verified"] - summary["graph"]:
             logger.warning("Answer has unsupported citations: %s", summary)
-        return {"answer": answer, "citations": citations, "answer_status": status}
+        return {"answer": answer, "citations": citations, "answer_status": status, "requested": []}
+
+    def _can_ask_for_more(self, state: Mapping[str, Any]) -> bool:
+        return bool(state.get("allow_followup", True)) and state.get("followup_round", 0) < self.config.followup_rounds
+
+    _REQUEST_RE = re.compile(r"^[\s*_`>]*NEED\s*:\s*(.*)", re.DOTALL)
+
+    @classmethod
+    def parse_request(cls, text: str, max_items: int) -> list[str] | None:
+        """Items of a `NEED: a, b` reply, or None when the text is an answer."""
+        match = cls._REQUEST_RE.match(text or "")
+        if match is None:
+            return None
+        items: list[str] = []
+        for raw in re.split(r"[,;\n]", match.group(1)):
+            item = raw.strip().rstrip(".").strip("`*_'\" ")
+            if item and len(item) <= 200 and item not in items:
+                items.append(item)
+        return items[:max_items]
+
+    @staticmethod
+    def looks_like_request(prefix: str) -> bool:
+        """Whether a streamed answer's first characters are a `NEED:` request (kept from the UI)."""
+        return prefix.lstrip(" \n*_`>").upper().startswith("NEED")
+
+    def node_fetch_more(self, state: AgentState) -> dict[str, Any]:
+        """Fetches what the model asked for: exact symbols first, search when no symbol matches."""
+        repo_url = state["repo_url"]
+        errors = list(state.get("errors", []))
+        expanded = list(state.get("expanded_results", []))
+        seen = {(h.get("filepath"), h.get("symbol")) for h in [*state.get("vector_results", []), *expanded]}
+        per_item = self.config.followup_chunks_per_item
+        found_log: list[dict[str, Any]] = []
+        anchors: list[dict[str, str]] = []
+
+        for item in state.get("requested", []):
+            hits: list[dict[str, Any]] = []
+            try:
+                is_path = "/" in item or bool(re.search(r"\.\w{1,4}$", item))
+                if not is_path:
+                    hits = code_intel.get_symbol_code(repo_url, item)[:per_item]
+                if not hits:
+                    hits = code_intel.search_code(repo_url, item, limit=per_item)
+            except Exception as e:
+                logger.error(f"Fetching requested context failed for {item}: {e}", exc_info=True)
+                errors.append(f"fetch_more_failed: {item}: {e}")
+            added = []
+            for hit in hits:
+                key = (hit.get("filepath"), hit.get("symbol"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                expanded.append({**hit, "sources": ["requested"], "reason": f"requested by the model: {item}"})
+                anchors.append({"filepath": str(hit.get("filepath")), "symbol": str(hit.get("symbol"))})
+                added.append({k: hit.get(k) for k in ("symbol", "filepath", "start_line", "end_line")})
+            found_log.append({"item": item, "found": added})
+
+        # The new symbols' callers, callees and overrides, so the answer can place them.
+        graph_results = list(state.get("graph_results", []))
+        if anchors:
+            try:
+                known = {(r.get("filepath"), r.get("name")) for r in graph_results}
+                for row in graph_db.get_symbol_context(
+                    repo_url=repo_url, anchors=anchors, names=[], max_depth=1, fanout=self.config.graph_fanout
+                ):
+                    if (row.get("filepath"), row.get("name")) not in known:
+                        graph_results.append(row)
+            except Exception as e:
+                errors.append(f"fetch_more_graph_failed: {e}")
+
+        round_no = state.get("followup_round", 0) + 1
+        return {
+            "expanded_results": expanded,
+            "graph_results": graph_results,
+            "followup_round": round_no,
+            "requested": [],
+            "followups": [*state.get("followups", []), {"round": round_no, "items": found_log}],
+            "errors": errors,
+        }
 
     @staticmethod
     def _format_history(history: list[dict[str, str]], answer_chars: int) -> str:
@@ -661,7 +779,13 @@ class CodeAgent:
                     break  # not a capacity problem: another model won't fix it
         return None, "degraded", reason
 
-    def _initial_state(self, question: str, repo_url: str, history: list[dict[str, str]] | None = None) -> AgentState:
+    def _initial_state(
+        self,
+        question: str,
+        repo_url: str,
+        history: list[dict[str, str]] | None = None,
+        allow_followup: bool = True,
+    ) -> AgentState:
         return {
             "question": question,
             "repo_url": repo_url,
@@ -681,14 +805,33 @@ class CodeAgent:
             "answer": "",
             "citations": [],
             "answer_status": "ok",
+            "allow_followup": allow_followup,
+            "followup_round": 0,
+            "requested": [],
+            "followups": [],
         }
 
-    def run(self, question: str, repo_url: str, history: list[dict[str, str]] | None = None) -> AgentResult:
-        final = self.workflow.invoke(self._initial_state(question, repo_url, history))
-        return {"answer": final["answer"], "citations": final["citations"], "status": final["answer_status"]}
+    def run(
+        self,
+        question: str,
+        repo_url: str,
+        history: list[dict[str, str]] | None = None,
+        allow_followup: bool = True,
+    ) -> AgentResult:
+        final = self.workflow.invoke(self._initial_state(question, repo_url, history, allow_followup))
+        return {
+            "answer": final["answer"],
+            "citations": final["citations"],
+            "status": final["answer_status"],
+            "followups": final["followups"],
+        }
 
     def run_stream(
-        self, question: str, repo_url: str, history: list[dict[str, str]] | None = None
+        self,
+        question: str,
+        repo_url: str,
+        history: list[dict[str, str]] | None = None,
+        allow_followup: bool = True,
     ) -> Iterator[dict[str, Any]]:
         """Runs the workflow, yielding events as it goes:
 
@@ -697,20 +840,37 @@ class CodeAgent:
         - {"type": "answer"} the final answer with checked citations; replaces the streamed text
           (it differs when the fallback model or the no-model answer took over)
         """
-        state: dict[str, Any] = dict(self._initial_state(question, repo_url, history))
+        state: dict[str, Any] = dict(self._initial_state(question, repo_url, history, allow_followup))
+        # Each generation round holds its first characters back until it's clear whether
+        # they start an answer (streamed) or a `NEED:` request (never shown).
+        held, decided, hidden = "", False, False
         for mode, chunk in self.workflow.stream(state, stream_mode=["updates", "messages"]):
             if mode == "messages":
                 message, metadata = chunk
                 # Only the answer: the planner's structured-output call streams through here too.
-                if metadata.get("langgraph_node") == "generate_response":
-                    text = getattr(message, "text", "")
-                    if isinstance(text, str) and text:
+                if metadata.get("langgraph_node") != "generate_response":
+                    continue
+                text = getattr(message, "text", "")
+                if not isinstance(text, str) or not text:
+                    continue
+                if decided:
+                    if not hidden:
                         yield {"type": "token", "content": text}
+                    continue
+                held += text
+                if len(held.lstrip(" \n*_`>")) >= 4:
+                    decided, hidden = True, self.looks_like_request(held)
+                    if not hidden:
+                        yield {"type": "token", "content": held}
                 continue
             for node, delta in chunk.items():
                 started = time.perf_counter()
                 state.update(delta or {})
                 if node == "generate_response":
+                    held, decided, hidden = "", False, False
+                    if state.get("requested"):
+                        # A request, not an answer: the fetch_more step event follows.
+                        continue
                     yield {
                         "type": "answer",
                         "content": state["answer"],
@@ -783,6 +943,8 @@ class CodeAgent:
                     for r in state.get("vector_results", [])
                 ],
             }
+        elif node == "fetch_more":
+            data = state["followups"][-1] if state.get("followups") else {}
         elif node == "graph_search":
             data = self._graph_payload(state.get("graph_results", []))
             data["depth"] = (

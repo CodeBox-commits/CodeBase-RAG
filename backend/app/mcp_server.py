@@ -155,11 +155,12 @@ def impact_of(repo_url: str, name: str, depth: int = 3, filepath: str | None = N
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=True))
-def ask_codebase(repo_url: str, question: str) -> dict[str, Any]:
+def ask_codebase(repo_url: str, question: str, allow_followup: bool = True) -> dict[str, Any]:
     """Answer a question about the repository with cited file:line sources.
 
     Runs the full RAG pipeline (plan, hybrid search, rerank, graph walk) and calls Gemini,
     so it's slower and uses quota. Prefer the graph tools for exact structural questions.
+    With allow_followup the model may ask once for missing code (one more model call).
     """
     from app.services.agent import get_agent  # imported lazily: needs GEMINI_API_KEY
 
@@ -167,7 +168,7 @@ def ask_codebase(repo_url: str, question: str) -> dict[str, Any]:
         agent = get_agent()
     except RuntimeError as e:
         raise ToolError(str(e)) from e
-    result = agent.run(question, _repo(repo_url))
+    result = agent.run(question, _repo(repo_url), allow_followup=allow_followup)
     # Citations carry a status (verified / graph / wrong_line / unknown_file): trust accordingly.
     return {"question": question, **result}
 

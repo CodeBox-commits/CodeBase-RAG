@@ -36,7 +36,7 @@ export interface TaskStatus {
 
 // ---- agent pipeline events --------------------------------------------------
 
-export type StepNode = 'query_planner' | 'retrieval_router' | 'embed_queries' | 'retrieve' | 'rerank' | 'graph_search'
+export type StepNode = 'query_planner' | 'retrieval_router' | 'embed_queries' | 'retrieve' | 'rerank' | 'graph_search' | 'fetch_more'
 
 export interface RetrievedHit {
   symbol: string
@@ -214,14 +214,20 @@ export interface ChatTurn {
 export async function ask(
   question: string,
   repoUrl: string,
-  history: ChatTurn[],
+  options: { history: ChatTurn[]; allowFollowup: boolean },
   handlers: { onStep: (e: StepEvent) => void; onToken: (text: string) => void; onAnswer: (a: FinalAnswer) => void },
   signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch('/api/v1/chat/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, repo_url: repoUrl, stream: true, history }),
+    body: JSON.stringify({
+      question,
+      repo_url: repoUrl,
+      stream: true,
+      history: options.history,
+      allow_followup: options.allowFollowup,
+    }),
     signal,
   })
   if (!res.ok || !res.body) throw new Error(await readError(res))

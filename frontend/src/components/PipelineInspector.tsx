@@ -14,17 +14,24 @@ const STEPS: { node: UiStep; label: string; sub: string }[] = [
   { node: 'retrieve', label: 'Search & fuse', sub: 'Qdrant vector lists + RediSearch BM25 → Reciprocal Rank Fusion' },
   { node: 'rerank', label: 'Rerank', sub: 'Local cross-encoder (MiniLM-L-12) rescores each candidate against the question' },
   { node: 'graph_search', label: 'Traverse graph', sub: 'Neo4j: callers, callees, overrides; pulls in the code they point to' },
+  { node: 'fetch_more', label: 'Ask for more', sub: 'The model named code it was missing; it was fetched before answering' },
   { node: 'generate', label: 'Generate answer', sub: 'Grounded answer with file:line citations' },
 ]
 
 type StepState = 'pending' | 'active' | 'done' | 'failed'
+
+// "Ask for more" only appears when the model actually asked.
+function stepsFor(msg: Message) {
+  const ran = (msg.trace ?? []).some((e) => e.node === 'fetch_more')
+  return STEPS.filter((s) => s.node !== 'fetch_more' || ran)
+}
 
 function stepStates(msg: Message): Record<UiStep, StepState> {
   const trace = msg.trace ?? []
   const seen = new Map(trace.map((e) => [e.node, e]))
   const out = {} as Record<UiStep, StepState>
   let activeGiven = false
-  STEPS.forEach(({ node }) => {
+  stepsFor(msg).forEach(({ node }) => {
     let s: StepState
     if (node === 'generate') s = !msg.pending && msg.content ? (msg.error ? 'failed' : 'done') : 'pending'
     else if (seen.has(node)) s = 'done'
@@ -331,6 +338,32 @@ function GraphPanel({ data }: { data: Record<string, any> }) { // eslint-disable
   )
 }
 
+function FetchMorePanel({ data }: { data: Record<string, any> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const items: { item: string; found: { symbol: string; filepath: string; start_line: number }[] }[] = data.items ?? []
+  return (
+    <div className="step-panel">
+      {items.map(({ item, found }) => (
+        <div key={item} className="kv col">
+          <span>Asked for <b className="mono">{item}</b></span>
+          {found.length ? (
+            <ol className="ranked">
+              {found.map((f) => (
+                <li key={`${f.filepath}:${f.symbol}`}>
+                  <span className="rank">+</span>
+                  <div className="ranked-body">
+                    <div className="ranked-top"><span className="ranked-sym">{f.symbol}</span></div>
+                    <div className="ranked-loc mono">{f.filepath}:{f.start_line}</div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : <span className="muted small">Nothing new found (already in the context, or not in the index).</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function StepBody({ node, event, msg }: { node: UiStep; event?: StepEvent; msg: Message }) {
   if (node === 'generate') {
     if (msg.pending || !msg.finishedAt || !msg.startedAt) return null
@@ -343,6 +376,7 @@ function StepBody({ node, event, msg }: { node: UiStep; event?: StepEvent; msg: 
   if (node === 'retrieve') return <RetrievePanel data={event.data} />
   if (node === 'rerank') return <RerankPanel data={event.data} />
   if (node === 'graph_search') return <GraphPanel data={event.data} />
+  if (node === 'fetch_more') return <FetchMorePanel data={event.data} />
   return null
 }
 
@@ -358,17 +392,18 @@ export default function PipelineInspector({ msg, question }: { msg: Message | nu
       </div>
     )
   }
+  const steps = stepsFor(msg)
   const states = stepStates(msg)
   const events = new Map((msg.trace ?? []).map((e) => [e.node, e]))
   const errors = (msg.trace ?? []).at(-1)?.errors ?? []
-  const doneCount = STEPS.filter((s) => states[s.node] === 'done').length
+  const doneCount = steps.filter((s) => states[s.node] === 'done').length
 
   return (
     <div className="inspector">
       {question && <div className="inspector-q">“{question}”</div>}
-      <div className="inspector-progress"><span style={{ width: `${(doneCount / STEPS.length) * 100}%` }} /></div>
+      <div className="inspector-progress"><span style={{ width: `${(doneCount / steps.length) * 100}%` }} /></div>
       <ol className="pipe">
-        {STEPS.map((s, i) => {
+        {steps.map((s, i) => {
           const st = states[s.node]
           const open = st === 'done' && !collapsed.has(s.node)
           return (

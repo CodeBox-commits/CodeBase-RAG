@@ -32,6 +32,10 @@ class ChatQueryRequest(BaseModel):
         max_length=20,
         description="Earlier messages of this conversation, oldest first, for follow-up questions.",
     )
+    allow_followup: bool = Field(
+        default=True,
+        description="Let the model ask once for code missing from the context (one more model call when it does).",
+    )
 
 
 class ChatQueryResponse(BaseModel):
@@ -40,14 +44,15 @@ class ChatQueryResponse(BaseModel):
     answer: str
     citations: list[dict[str, Any]]
     status: str
+    followups: list[dict[str, Any]]
 
 
 async def stream_agent_response(
-    agent: CodeAgent, question: str, repo_url: str, history: list[dict[str, str]]
+    agent: CodeAgent, question: str, repo_url: str, history: list[dict[str, str]], allow_followup: bool
 ) -> AsyncGenerator[str, None]:
     try:
         # Each pipeline step is sent as it finishes, so the UI can animate real progress.
-        async for event in iterate_in_threadpool(agent.run_stream(question, repo_url, history)):
+        async for event in iterate_in_threadpool(agent.run_stream(question, repo_url, history, allow_followup)):
             yield f"data: {json.dumps(event, default=str)}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -75,13 +80,13 @@ async def ask_codebase(payload: ChatQueryRequest, agent: CodeAgent = Depends(get
 
     if payload.stream:
         return StreamingResponse(
-            stream_agent_response(agent, payload.question, str_repo_url, history),
+            stream_agent_response(agent, payload.question, str_repo_url, history, payload.allow_followup),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
         )
 
     try:
-        result = await run_in_threadpool(agent.run, payload.question, str_repo_url, history)
+        result = await run_in_threadpool(agent.run, payload.question, str_repo_url, history, payload.allow_followup)
         return ChatQueryResponse(question=payload.question, repo_url=str_repo_url, **result)
     except Exception as e:
         logger.error(f"Failed execution for query on {str_repo_url}: {e}", exc_info=True)
