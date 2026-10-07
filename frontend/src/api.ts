@@ -5,8 +5,13 @@ export type TaskState =
 
 export interface IndexResult {
   status: 'success' | 'partial_success'
+  /** full: everything (re)built · incremental: only changed files · up_to_date: nothing to do */
+  mode?: 'full' | 'incremental' | 'up_to_date'
+  commit?: string
   parsed_files: number
   failed_files: number
+  files?: { added: number; modified: number; deleted: number; unchanged: number }
+  embedded_chunks?: number
   symbols: number
   call_edges: number
   inherits_edges?: number
@@ -126,11 +131,12 @@ async function readError(res: Response): Promise<string> {
   }
 }
 
-export async function startIndex(repoUrl: string): Promise<{ task_id: string; repo_url: string }> {
+/** Incremental by default: only files changed since the last run are embedded. */
+export async function startIndex(repoUrl: string, full = false): Promise<{ task_id: string; repo_url: string }> {
   const res = await fetch('/api/v1/repo/index', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repo_url: repoUrl }),
+    body: JSON.stringify({ repo_url: repoUrl, full }),
   })
   if (!res.ok) throw new Error(await readError(res))
   return res.json()

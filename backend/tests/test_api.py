@@ -115,13 +115,18 @@ def test_index_submits_normalised_url(client, monkeypatch):
     class FakeTask:
         id = "task-123"
 
-    monkeypatch.setattr(repo_module.process_repository, "delay", lambda url: submitted.append(url) or FakeTask())
+    monkeypatch.setattr(
+        repo_module.process_repository, "delay", lambda url, full: submitted.append((url, full)) or FakeTask()
+    )
 
     res = client.post("/api/v1/repo/index", json={"repo_url": "https://github.com/a/b.git/"})
 
     assert res.status_code == 200
     assert res.json()["task_id"] == "task-123"
-    assert submitted == ["https://github.com/a/b"]
+    assert submitted == [("https://github.com/a/b", False)]
+
+    client.post("/api/v1/repo/index", json={"repo_url": "https://github.com/a/b", "full": True})
+    assert submitted[-1] == ("https://github.com/a/b", True)
 
 
 @pytest.mark.skipif(

@@ -16,11 +16,13 @@ logger = logging.getLogger(__name__)
 #   (Class)-[:HAS_METHOD]->(Method)
 #   (Symbol)-[:CALLS]->(Symbol)     resolved in-repo calls only
 #   (Class)-[:INHERITS]->(Class)
+#   (:File {repo_url, path, sha})   git blob SHA of each indexed file, for incremental re-indexing
 
 _SCHEMA_STATEMENTS = [
     "CREATE INDEX symbol_identity IF NOT EXISTS FOR (n:Symbol) ON (n.repo_url, n.filepath, n.qualified_name)",
     "CREATE INDEX symbol_name IF NOT EXISTS FOR (n:Symbol) ON (n.repo_url, n.name)",
     "CREATE INDEX repository_url IF NOT EXISTS FOR (r:Repository) ON (r.url)",
+    "CREATE INDEX file_identity IF NOT EXISTS FOR (f:File) ON (f.repo_url, f.path)",
 ]
 
 _EDGE_TYPES = ("CALLS", "INHERITS", "HAS_METHOD")
@@ -207,13 +209,105 @@ class Neo4jService:
         # CALL {} IN TRANSACTIONS needs an auto-commit transaction, hence session.run.
         symbols_query = """
         MATCH (n)
-        WHERE (n:Symbol OR n:Function OR n:UnresolvedCall) AND n.repo_url = $repo_url
+        WHERE (n:Symbol OR n:Function OR n:UnresolvedCall OR n:File) AND n.repo_url = $repo_url
         CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 1000 ROWS
         """
         repo_query = "MATCH (r:Repository {url: $repo_url}) DETACH DELETE r"
         with self._require_driver().session() as session:
             session.run(symbols_query, repo_url=repo_url).consume()
             session.run(repo_query, repo_url=repo_url).consume()
+
+    # --- incremental indexing -------------------------------------------------------------
+
+    def get_index_state(self, repo_url: str) -> dict[str, Any] | None:
+        """What the last indexing run recorded: commit, index version and each file's blob SHA."""
+        query = """
+        MATCH (r:Repository {url: $repo_url})
+        OPTIONAL MATCH (f:File {repo_url: $repo_url})
+        RETURN r.commit AS commit, r.index_version AS index_version,
+               collect(CASE WHEN f IS NULL THEN NULL ELSE [f.path, f.sha] END) AS files
+        """
+        with self._require_driver().session() as session:
+            record = session.run(query, repo_url=repo_url).single()
+        if record is None:
+            return None
+        return {
+            "commit": record["commit"],
+            "index_version": record["index_version"],
+            "files": {path: sha for path, sha in record["files"]},
+        }
+
+    def repository_files(self, repo_url: str) -> set[str]:
+        """Every file path that has symbols in the graph (covers indexes made before File nodes)."""
+        query = "MATCH (n:Symbol {repo_url: $repo_url}) RETURN DISTINCT n.filepath AS path"
+        with self._require_driver().session() as session:
+            return {record["path"] for record in session.run(query, repo_url=repo_url)}
+
+    def delete_files(self, repo_url: str, paths: list[str]):
+        """Removes the symbols (and their edges) of these files."""
+        if not paths:
+            return
+        query = """
+        MATCH (n:Symbol {repo_url: $repo_url}) WHERE n.filepath IN $paths
+        DETACH DELETE n
+        """
+        with self._require_driver().session() as session:
+            session.execute_write(_run_write, query, repo_url=repo_url, paths=paths)
+
+    def delete_relationships(self, repo_url: str):
+        """Drops every CALLS / INHERITS / HAS_METHOD edge of a repository before re-linking."""
+        query = """
+        MATCH (:Symbol {repo_url: $repo_url})-[r:CALLS|INHERITS|HAS_METHOD]->()
+        CALL { WITH r DELETE r } IN TRANSACTIONS OF 5000 ROWS
+        """
+        with self._require_driver().session() as session:
+            session.run(query, repo_url=repo_url).consume()
+
+    def save_index_state(
+        self, repo_url: str, commit: str | None, index_version: int, files: dict[str, str], removed: list[str]
+    ):
+        query = """
+        MATCH (r:Repository {url: $repo_url})
+        SET r.commit = $commit, r.index_version = $index_version
+        WITH r
+        UNWIND $files AS file
+        MERGE (f:File {repo_url: $repo_url, path: file.path})
+        SET f.sha = file.sha
+        """
+        rows = [{"path": path, "sha": sha} for path, sha in files.items()]
+        with self._require_driver().session() as session:
+            if removed:
+                session.execute_write(
+                    _run_write,
+                    "MATCH (f:File {repo_url: $repo_url}) WHERE f.path IN $paths DELETE f",
+                    repo_url=repo_url,
+                    paths=removed,
+                )
+            if rows:
+                session.execute_write(
+                    _run_write, query, repo_url=repo_url, commit=commit, index_version=index_version, files=rows
+                )
+            else:
+                session.execute_write(
+                    _run_write,
+                    "MATCH (r:Repository {url: $repo_url}) SET r.commit = $commit, r.index_version = $index_version",
+                    repo_url=repo_url,
+                    commit=commit,
+                    index_version=index_version,
+                )
+
+    def count_repository(self, repo_url: str) -> dict[str, int]:
+        query = """
+        MATCH (n:Symbol {repo_url: $repo_url})
+        RETURN count(n) AS symbols,
+               sum(COUNT { (n)-[:CALLS]->() }) AS call_edges,
+               sum(COUNT { (n)-[:INHERITS]->() }) AS inherits_edges
+        """
+        with self._require_driver().session() as session:
+            record = session.run(query, repo_url=repo_url).single()
+        if record is None:
+            return {"symbols": 0, "call_edges": 0, "inherits_edges": 0}
+        return {k: int(record[k] or 0) for k in ("symbols", "call_edges", "inherits_edges")}
 
     def merge_symbols(self, repo_url: str, chunks: list[ExtractedChunk]):
         if not chunks:

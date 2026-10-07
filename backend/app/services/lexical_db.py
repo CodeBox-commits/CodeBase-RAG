@@ -191,6 +191,29 @@ class LexicalDB:
             repo_url,
         )
 
+    def delete_files(self, repo_url: str, paths: list[str]):
+        """Removes the BM25 entries of these files only (incremental re-indexing).
+
+        filepath is a TEXT field (tokenised for search), so exact matching happens here: the
+        repository's documents are listed by their repo tag and filtered by path.
+        """
+        if not paths:
+            return
+        wanted = set(paths)
+        doomed: list[str] = []
+        page_size, offset = 1000, 0
+        while True:
+            query = (
+                Query(f"@repo_url:{{{self._escape_tag(repo_url)}}}").return_fields("filepath").paging(offset, page_size)
+            )
+            results = self._require_client().ft(self.index_name).search(query)
+            doomed.extend(doc.id for doc in results.docs if getattr(doc, "filepath", None) in wanted)
+            offset += page_size
+            if offset >= results.total or not results.docs:
+                break
+        if doomed:
+            self._require_client().delete(*doomed)
+
     def search(
         self,
         terms: list[str],

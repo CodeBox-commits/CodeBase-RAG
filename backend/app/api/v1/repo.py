@@ -16,12 +16,14 @@ router = APIRouter()
 
 class RepoIndexRequest(BaseModel):
     repo_url: HttpUrl
+    # Re-indexing is incremental (only changed files are embedded); this rebuilds everything.
+    full: bool = False
 
 
 @router.post("/index")
 async def index_repository(request: RepoIndexRequest):
     repo_url = normalize_repo_url(str(request.repo_url))
-    task = process_repository.delay(repo_url)
+    task = process_repository.delay(repo_url, request.full)
 
     return {"message": "Repository ingestion task submitted successfully.", "task_id": task.id, "repo_url": repo_url}
 

@@ -34,7 +34,7 @@ This project indexes code the way you read it:
 
 | Page | What it does |
 |---|---|
-| **Index** | Paste a public GitHub URL and watch it clone, parse, embed, store and link, with live progress for each stage. |
+| **Index** | Paste a public GitHub URL and watch it clone, parse, embed, store and link, with live progress for each stage. **Update** re-embeds only the files that changed since the last run; **Full rebuild** redoes everything. |
 | **Explore** | Walk the repository as a **code city**: each tower is a function, method or class, as tall as its code is long, standing on its file's plot. Click one to light up its calls, or ask **"What breaks if this changes?"** to light up its whole blast radius (callers, subclasses and overrides, up to 3 hops) with a per-file list. You can switch to a force-directed graph view, filter by file or search by name. |
 | **MCP** | Coding agents (Claude Code, Cursor and others) use the same code intelligence as tools: see [MCP server](#mcp-server). |
 | **Ask** | Ask in plain English, and follow up ("and what calls it?"). The answer streams in token by token next to a pipeline inspector, where you can open each step and see the plan, the search queries, the ranked hits, the reranker's reordering and the call tree. Every `file:line` citation is a chip marked verified or unverified; click it to open that code. |
@@ -45,10 +45,15 @@ This project indexes code the way you read it:
 
 **Indexing** runs in a Celery worker, so the UI never blocks:
 
-1. Shallow-clone the repository (`git clone --depth 1`), skipping tests, virtualenvs and `.git`.
-2. Parse every `.py` file with `ast` into symbols with exact line spans, and collect call sites.
-3. Embed each chunk locally with `BAAI/bge-small-en-v1.5` (384-d, via FastEmbed). Embeddings are cached in Redis, so re-indexing only pays for code that changed.
-4. Write vectors to Qdrant, BM25 text to RediSearch, and symbols plus resolved edges to Neo4j, all keyed by the normalised repository URL.
+1. Shallow-clone the repository (`git clone --depth 1`), skipping tests, virtualenvs, `node_modules` and `.git`.
+2. Compare each file's git blob hash with the last run: only **new or changed** files go on to be embedded and
+   stored; deleted files are removed. An unchanged commit returns "up to date" at once.
+3. Parse every Python, JavaScript and TypeScript file into symbols with exact line spans and call sites. All files
+   are parsed (it's cheap), so calls between changed and unchanged files resolve correctly.
+4. Embed the changed chunks locally with `BAAI/bge-small-en-v1.5` (384-d, via FastEmbed).
+5. Swap each changed file's old vectors (Qdrant), BM25 entries (RediSearch) and symbols (Neo4j) for the new ones once
+   they're ready, so the repository never goes empty; then re-link every call and inheritance edge. A file that fails
+   keeps its old data and is retried next run. `"full": true`, or a parser change (`INDEX_VERSION`), rebuilds everything.
 
 **Every question** runs through a LangGraph state machine:
 
@@ -60,10 +65,13 @@ This project indexes code the way you read it:
 5. **Traverse:** Neo4j returns callers, callees, base classes, methods and overrides (same-named methods up and down
    the class hierarchy). The code of up to 6 related symbols the search missed is pulled in too: symbols named in the
    question, overrides of retrieved methods, and direct callees of the top hits.
-6. **Answer:** Gemini writes the answer from that context only, with file-and-line citations. Tokens stream to the UI as
+6. **Ask for more (optional):** if code it needs isn't in the context, the model replies `NEED: <names>` instead of
+   guessing; those symbols are fetched (exact lookup, then search) and it answers. One round, never shown to the user,
+   and skippable per question (`allow_followup: false`, or the toggle under the Ask box).
+7. **Answer:** Gemini writes the answer from that context only, with file-and-line citations. Tokens stream to the UI as
    Server-Sent Events. If the model is rate-limited, `LLM_FALLBACK_MODEL` is tried; with no model at all, the answer
    lists the retrieved code instead of failing.
-7. **Check citations:** every `path:line` in the answer is matched against what the model was shown: *verified* (the
+8. **Check citations:** every `path:line` in the answer is matched against what the model was shown: *verified* (the
    line was in shown code), *graph* (a location from the call graph), or unverified (*wrong line* / *unknown file*).
 
 ## Tech stack
@@ -112,6 +120,7 @@ Set these in `backend/.env` (see [`backend/.env.example`](backend/.env.example))
 | `GEMINI_API_KEY` | (required) | Planner and answer model |
 | `LLM_MODEL` | `gemini-3.5-flash-lite` | Gemini model for planning and answers |
 | `LLM_FALLBACK_MODEL` | (unset) | Tried for answers when `LLM_MODEL` is rate-limited or overloaded |
+| `AGENT_FOLLOWUP_ROUNDS` | `1` | How many times the model may ask for missing code; `0` turns ask-for-more off |
 | `EMBEDDING_PROVIDER` | `local` | `local` (free, offline) or `gemini` (768-d, uses your API quota) |
 | `VECTOR_TOP_K` | `8` | Chunks kept after reranking |
 | `RERANK_CANDIDATES` | `24` | Candidates passed to the reranker |
@@ -128,12 +137,12 @@ means re-indexing.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/v1/repo/index` | Start indexing a repository; returns a task ID |
+| `POST` | `/api/v1/repo/index` | Index or update a repository (only changed files; `"full": true` rebuilds); returns a task ID |
 | `GET` | `/api/v1/repo/status/{task_id}` | Stage, progress and result of an indexing task |
 | `GET` | `/api/v1/repo/list` | Every indexed repository with its symbol count |
 | `DELETE` | `/api/v1/repo?repo_url=…` | Remove a repository's vectors, BM25 entries and graph |
 | `GET` | `/api/v1/repo/graph?repo_url=…&limit=…` | Symbols and edges for the Explore page |
-| `POST` | `/api/v1/chat/` | Ask a question; set `"stream": true` for Server-Sent Events |
+| `POST` | `/api/v1/chat/` | Ask a question (`"stream"`, `"history"` for follow-ups, `"allow_followup"`); SSE when streaming |
 | `GET` | `/api/v1/symbols/definitions?repo_url=…&name=…` | Every symbol with that name: location, class, bases, overrides, direct calls and callers |
 | `GET` | `/api/v1/symbols/callers?repo_url=…&name=…&depth=1-5` | Who calls this symbol, up to `depth` hops back |
 | `GET` | `/api/v1/symbols/callees?repo_url=…&name=…&depth=1-5` | What this symbol calls, up to `depth` hops forward |

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { IndexResult } from '../api'
 import IngestScene, { INGEST_STAGES } from '../components/IngestScene'
 import { navigate } from '../router'
 import { repoName, useRepos, type Repo } from '../state'
@@ -62,6 +63,24 @@ function Meter({ label, value = 0, indeterminate }: { label: string; value?: num
   )
 }
 
+function RunSummary({ result }: { result: IndexResult }) {
+  if (result.mode === 'up_to_date') {
+    return <p className="run-summary">Already up to date{result.commit ? ` at ${result.commit.slice(0, 8)}` : ''}: nothing to re-embed.</p>
+  }
+  if (!result.files) return null
+  const { added, modified, deleted, unchanged } = result.files
+  if (result.mode === 'full') {
+    return <p className="run-summary">Full build: {added} files, {result.embedded_chunks ?? '?'} chunks embedded{deleted ? `, ${deleted} stale files removed` : ''}.</p>
+  }
+  return (
+    <p className="run-summary">
+      Updated {added + modified} changed {added + modified === 1 ? 'file' : 'files'}
+      {added > 0 && ` (${added} new)`}
+      {deleted > 0 && `, removed ${deleted}`} · {unchanged} unchanged · {result.embedded_chunks ?? 0} chunks re-embedded
+    </p>
+  )
+}
+
 export default function IndexPage() {
   const { repos, active, setActive, index, remove } = useRepos()
   const [url, setUrl] = useState('')
@@ -82,11 +101,11 @@ export default function IndexPage() {
     }
   }
 
-  async function submit(target: string) {
+  async function submit(target: string, full = false) {
     setError('')
     setBusy(true)
     try {
-      await index(target)
+      await index(target, full)
       setUrl('')
     } catch (e) {
       setError((e as Error).message)
@@ -176,13 +195,15 @@ export default function IndexPage() {
                 <div className="stat"><strong>{active.result.call_edges}</strong><span>call edges</span></div>
                 <div className="stat"><strong>{active.result.inherits_edges ?? '—'}</strong><span>inheritance</span></div>
               </div>
+              <RunSummary result={active.result} />
               {active.result.failed_files > 0 && (
-                <p className="warn small">{active.result.failed_files} files could not be ingested.</p>
+                <p className="warn small">{active.result.failed_files} files could not be ingested; they keep their previous data and are retried next run.</p>
               )}
               <div className="result-actions">
                 <button className="btn btn-primary" onClick={() => navigate('/explore')}>Explore the city</button>
                 <button className="btn btn-ghost" onClick={() => navigate('/ask')}>Ask a question</button>
-                <button className="btn btn-ghost" onClick={() => submit(active.url)}>Re-index</button>
+                <button className="btn btn-ghost" onClick={() => submit(active.url)} title="Only files changed since the last run are re-embedded">Update</button>
+                <button className="btn btn-ghost" onClick={() => submit(active.url, true)} title="Re-parse and re-embed every file">Full rebuild</button>
               </div>
             </div>
           )}

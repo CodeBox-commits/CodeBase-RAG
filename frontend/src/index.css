@@ -596,3 +596,5 @@ code, .mono { font-family: var(--mono); font-size: 0.88em; }
 .dual-bar span { display: block; height: 4px; animation: fill 0.8s both var(--ease); transform-origin: left; }
 .dual-bar .ce { background: var(--lit); }
 .dual-bar .rt { background: var(--cyan); opacity: 0.6; }
+
+.run-summary { font-size: 13px; color: var(--fog); margin: 12px 0 0; }
