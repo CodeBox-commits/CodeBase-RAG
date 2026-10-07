@@ -36,8 +36,8 @@ function Hop({ n }: { n: number }) {
       title={`${n} ${n === 1 ? 'step' : 'steps'} away`}
       className={cn(
         'grid size-5 shrink-0 place-items-center rounded-full text-[0.68rem] font-semibold tabular-nums',
-        n === 1 && 'bg-thread text-white dark:text-[#0e2350]',
-        n === 2 && 'bg-thread/55 text-white dark:text-[#0e2350]',
+        n === 1 && 'bg-thread text-[#160936]',
+        n === 2 && 'bg-thread/55 text-[#160936]',
         n >= 3 && 'bg-thread/20 text-foreground',
       )}
     >

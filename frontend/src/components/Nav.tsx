@@ -1,15 +1,13 @@
-import { Check, ChevronsUpDown, Menu, Moon, Plus, Search, Sun, SunMoon } from 'lucide-react'
+import { Check, ChevronsUpDown, Menu, Plus, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { navigate, type Route } from '../router'
 import { repoName, useRepos, type Repo } from '../state'
-import { useTheme, type ThemeChoice } from '../theme'
 
 const LINKS: { to: Route; label: string }[] = [
   { to: '/index', label: 'Index' },
@@ -17,16 +15,13 @@ const LINKS: { to: Route; label: string }[] = [
   { to: '/ask', label: 'Ask' },
 ]
 
-/** The mark: three blocks on a board, one thread between them. */
+/** The mark: three towers of the code city, lit in the kind colours. */
 export function Mark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={cn('size-7', className)} aria-hidden>
-      <rect width="32" height="32" rx="7" className="fill-graphite" />
-      <path d="M6 24h20" className="stroke-rule" strokeWidth="1.5" />
-      <rect x="7" y="14" width="5" height="10" fill="var(--kind-function)" />
-      <rect x="13.5" y="7" width="5" height="17" fill="var(--kind-class)" />
-      <rect x="20" y="11" width="5" height="13" fill="var(--kind-method)" />
-      <path d="M9.5 14 C 12 4, 20 4, 22.5 11" stroke="#6d86ff" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+    <svg viewBox="0 0 26 26" className={cn('size-7 drop-shadow-[0_0_6px_rgb(177_140_255/0.55)]', className)} aria-hidden>
+      <rect x="2" y="12" width="6" height="12" rx="1" fill="var(--kind-method)" />
+      <rect x="10" y="3" width="6" height="21" rx="1" fill="var(--thread)" />
+      <rect x="18" y="9" width="6" height="15" rx="1" fill="var(--kind-class)" />
     </svg>
   )
 }
@@ -37,8 +32,8 @@ export function StatusDot({ state, className }: { state?: Repo['state']; classNa
       aria-hidden
       className={cn(
         'inline-block size-2 shrink-0 rounded-full',
-        state === 'ready' && 'bg-verified',
-        state === 'indexing' && 'animate-pulse bg-highlight ring-1 ring-graphite/30',
+        state === 'ready' && 'bg-verified shadow-[0_0_6px_var(--verified)]',
+        state === 'indexing' && 'animate-pulse bg-highlight shadow-[0_0_6px_var(--highlight)]',
         state === 'failed' && 'bg-check',
         !state && 'bg-rule',
         className,
@@ -92,27 +87,6 @@ function RepoSwitcher() {
   )
 }
 
-export function ThemeMenu() {
-  const { choice, theme, setChoice } = useTheme()
-  const Icon = choice === 'system' ? SunMoon : theme === 'dark' ? Moon : Sun
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Theme">
-          <Icon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuRadioGroup value={choice} onValueChange={(v) => setChoice(v as ThemeChoice)}>
-          <DropdownMenuRadioItem value="light">Drafting film (light)</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark">Cyanotype (dark)</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="system">Match system</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 export default function Nav({ route, onOpenCommand }: { route: Route; onOpenCommand: () => void }) {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -158,7 +132,7 @@ export default function Nav({ route, onOpenCommand }: { route: Route; onOpenComm
           aria-label="Codebase RAG home"
         >
           <Mark />
-          <span className="display hidden whitespace-nowrap text-[1.45rem] leading-none tracking-[-0.005em] sm:inline">Codebase RAG</span>
+          <span className="hidden whitespace-nowrap text-[1.05rem] font-bold leading-none [font-stretch:112%] sm:inline">Codebase RAG</span>
         </a>
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">{links}</nav>
 
@@ -175,7 +149,6 @@ export default function Nav({ route, onOpenCommand }: { route: Route; onOpenComm
             <Kbd>{mac ? '⌘' : 'Ctrl'} K</Kbd>
           </Button>
           <RepoSwitcher />
-          <ThemeMenu />
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Menu">

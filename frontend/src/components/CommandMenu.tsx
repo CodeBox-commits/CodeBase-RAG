@@ -1,4 +1,4 @@
-import { Box, Compass, FolderGit2, MessageSquareText, Moon, Plus, Sun, SunMoon } from 'lucide-react'
+import { Box, Compass, FolderGit2, MessageSquareText, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   CommandDialog,
@@ -12,13 +12,11 @@ import {
 import { getRepoGraph, type GraphNode } from '../api'
 import { navigate } from '../router'
 import { repoName, useRepos } from '../state'
-import { useTheme } from '../theme'
 import { StatusDot } from './Nav'
 
 /** ⌘K: go to a page, switch repository, jump to a symbol of the active repository. */
 export default function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { repos, active, setActive, setFocusSymbol } = useRepos()
-  const { setChoice } = useTheme()
   const [symbols, setSymbols] = useState<{ url: string; nodes: GraphNode[] } | null>(null)
 
   useEffect(() => {
@@ -89,12 +87,6 @@ export default function CommandMenu({ open, onOpenChange }: { open: boolean; onO
             </CommandGroup>
           </>
         )}
-        <CommandSeparator />
-        <CommandGroup heading="Theme">
-          <CommandItem onSelect={() => run(() => setChoice('light'))}><Sun /> Drafting film (light)</CommandItem>
-          <CommandItem onSelect={() => run(() => setChoice('dark'))}><Moon /> Cyanotype (dark)</CommandItem>
-          <CommandItem onSelect={() => run(() => setChoice('system'))}><SunMoon /> Match system</CommandItem>
-        </CommandGroup>
       </CommandList>
     </CommandDialog>
   )

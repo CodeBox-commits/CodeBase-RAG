@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
-import { useTheme } from './theme'
 
 // The three.js scenes read their colours from the same CSS variables as the UI (styles.css),
-// so the model follows the theme: card and basswood on drafting film, or a cyanotype.
+// so the city and the interface can't drift apart.
 
 export interface ModelPalette {
   dark: boolean
@@ -27,37 +26,34 @@ function cssColor(styles: CSSStyleDeclaration, name: string, fallback: string): 
 export function readPalette(): ModelPalette {
   const s = getComputedStyle(document.documentElement)
   const c = (name: string, fallback: string) => cssColor(s, name, fallback)
-  const dark = document.documentElement.classList.contains('dark')
-  const thread = c('--thread', '#1233c4')
+  const thread = c('--thread', '#b18cff')
   return {
-    dark,
-    ground: c('--model-ground', '#dfe3dd'),
-    plot: c('--model-plot', '#eceee9'),
-    shadow: c('--model-shadow', '#9aa39a'),
-    graphite: c('--graphite', '#1d2128'),
-    pencil: c('--pencil', '#575f6b'),
-    rule: c('--rule', '#c6ccc4'),
+    dark: true,
+    ground: c('--film', '#140f2e'),
+    plot: c('--sheet', '#1b1540'),
+    shadow: 0x05030f,
+    graphite: c('--graphite', '#eeeaf8'),
+    pencil: c('--pencil', '#a49cc8'),
+    rule: c('--rule', '#3a2f6e'),
     thread,
-    highlight: c('--highlight', '#ffe15c'),
+    highlight: c('--highlight', '#ffc96b'),
     kinds: {
-      function: c('--kind-function', '#fbfbf8'),
-      method: c('--kind-method', '#cfd5cf'),
-      class: c('--kind-class', '#c8b28c'),
+      function: c('--kind-function', '#a3ee7f'),
+      method: c('--kind-method', '#5fd6f2'),
+      class: c('--kind-class', '#ff7aa8'),
     },
     edges: {
       CALLS: thread,
-      INHERITS: c('--pencil', '#575f6b'),
-      HAS_METHOD: c('--rule', '#c6ccc4'),
-      OVERRIDES: dark ? 0xffc78a : 0x9a6a14,
+      INHERITS: c('--kind-class', '#ff7aa8'),
+      HAS_METHOD: 0x4a3c8c,
+      OVERRIDES: c('--highlight', '#ffc96b'),
     },
   }
 }
 
-/** The palette for the current theme; a new object (so scenes rebuild) only when the theme changes. */
+/** The palette, read once from the CSS variables. */
 export function useModelPalette(): ModelPalette {
-  const { theme } = useTheme()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => readPalette(), [theme])
+  return useMemo(() => readPalette(), [])
 }
 
 export const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`

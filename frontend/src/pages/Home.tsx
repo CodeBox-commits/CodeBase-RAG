@@ -51,8 +51,8 @@ function Hop({ n }: { n: number }) {
     <span
       className={cn(
         'grid size-5 shrink-0 place-items-center rounded-full text-[0.68rem] font-semibold tabular-nums',
-        n === 1 && 'bg-thread text-white dark:text-[#0e2350]',
-        n === 2 && 'bg-thread/55 text-white dark:text-[#0e2350]',
+        n === 1 && 'bg-thread text-[#160936]',
+        n === 2 && 'bg-thread/55 text-[#160936]',
         n >= 3 && 'bg-thread/25 text-foreground',
       )}
       title={`${n} ${n === 1 ? 'call' : 'calls'} away`}
@@ -269,7 +269,7 @@ export default function Home() {
               The same lookups are tools for coding agents over MCP: search, definitions, callers and callees, impact, and
               cited answers. Everything except answers is an exact graph lookup, with no model calls.
             </p>
-            <div className="mt-6 overflow-hidden rounded-xl border bg-graphite text-[#e8ecf6] dark:bg-[#081a3f]">
+            <div className="mt-6 overflow-hidden rounded-xl border bg-[#0d0a22] text-[#e8e4f7]">
               <p className="border-b border-white/10 px-4 py-2.5 text-xs text-white/60">Add it to Claude Code</p>
               <pre className="overflow-x-auto px-4 py-4 font-mono text-[0.8rem] leading-relaxed">
                 <span className="text-white/45">$ </span>claude mcp add --transport http codebox http://localhost:8000/mcp

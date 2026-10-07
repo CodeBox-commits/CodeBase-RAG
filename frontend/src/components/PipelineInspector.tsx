@@ -124,7 +124,7 @@ function RoutePanel({ strategy }: { strategy: string }) {
             key={r}
             className={cn(
               'flex-1 rounded-md border px-2 py-1 text-center text-[0.76rem]',
-              r === strategy ? 'border-graphite bg-graphite text-sheet' : 'text-muted-foreground',
+              r === strategy ? 'glow border-thread bg-thread/15 text-thread' : 'text-muted-foreground',
             )}
           >
             {r}
@@ -144,7 +144,7 @@ function Fingerprint({ values }: { values: number[] }) {
       {values.map((v, i) => (
         <span key={i} className="flex h-full flex-1 flex-col justify-center">
           <span
-            className={cn('w-full rounded-[1px]', v >= 0 ? 'self-end bg-graphite/70' : 'bg-pencil/40')}
+            className={cn('w-full rounded-[1px]', v >= 0 ? 'self-end bg-[var(--kind-method)]/80' : 'bg-thread/50')}
             style={{ height: `${8 + (Math.abs(v) / max) * 42}%`, marginTop: v >= 0 ? 'auto' : undefined }}
           />
         </span>
@@ -396,8 +396,8 @@ function StepMarker({ state, n }: { state: StepState; n: number }) {
     <span
       className={cn(
         'relative z-10 grid size-6 shrink-0 place-items-center rounded-full border text-[0.72rem] font-semibold tabular-nums',
-        state === 'done' && 'border-graphite bg-graphite text-sheet',
-        state === 'active' && 'border-graphite/40 bg-highlight text-highlight-ink',
+        state === 'done' && 'border-thread bg-thread text-[#160936]',
+        state === 'active' && 'glow border-thread bg-thread/20 text-thread',
         state === 'failed' && 'border-check bg-check text-white',
         state === 'pending' && 'bg-sheet text-muted-foreground',
       )}

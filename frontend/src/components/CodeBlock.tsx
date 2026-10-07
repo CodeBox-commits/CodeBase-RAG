@@ -47,13 +47,13 @@ export default function CodeBlock({
           <div
             key={n}
             ref={hit && n === mark![0] ? markRef : undefined}
-            className={cn('flex min-w-max pr-4', hit && 'bg-highlight/70 text-highlight-ink dark:bg-highlight/25 dark:text-foreground')}
+            className={cn('flex min-w-max pr-4', hit && 'bg-highlight/15 shadow-[inset_2px_0_0_var(--highlight)]')}
           >
             <span
               aria-hidden
               className={cn(
                 'sticky left-0 w-12 shrink-0 select-none bg-inherit pr-3 text-right text-muted-foreground/70 tabular-nums',
-                hit && 'font-semibold text-highlight-ink dark:text-highlight',
+                hit && 'font-semibold text-highlight',
               )}
             >
               {n}

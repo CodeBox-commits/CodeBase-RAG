@@ -67,7 +67,7 @@ function Meter({ label, value, indeterminate }: { label: string; value?: number;
     <div className="mt-2.5">
       <div className="h-1.5 overflow-hidden rounded-full bg-rule-soft" role="progressbar" aria-valuenow={indeterminate ? undefined : value} aria-label={label}>
         <div
-          className={cn('h-full rounded-full bg-graphite transition-[width] duration-500', indeterminate && 'w-1/3 animate-[slide_1.4s_ease-in-out_infinite]')}
+          className={cn('h-full rounded-full bg-thread shadow-[0_0_10px_rgb(177_140_255/0.6)] transition-[width] duration-500', indeterminate && 'w-1/3 animate-[slide_1.4s_ease-in-out_infinite]')}
           style={indeterminate ? undefined : { width: `${value ?? 0}%` }}
         />
       </div>
@@ -316,8 +316,8 @@ export default function IndexPage() {
                       <span
                         className={cn(
                           'relative z-10 grid size-6 shrink-0 place-items-center rounded-full border text-[0.72rem] font-semibold tabular-nums',
-                          state === 'done' && 'border-graphite bg-graphite text-sheet',
-                          state === 'active' && 'border-graphite/40 bg-highlight text-highlight-ink',
+                          state === 'done' && 'border-thread bg-thread text-[#160936]',
+                          state === 'active' && 'glow border-thread bg-thread/20 text-thread',
                           state === 'pending' && 'bg-sheet text-muted-foreground',
                         )}
                       >

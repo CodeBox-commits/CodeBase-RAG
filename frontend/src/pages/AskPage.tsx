@@ -58,7 +58,7 @@ function Answer({ msg, onCite }: { msg: Message; onCite: (t: CitationTarget) => 
         >
           {linkifyCitations(msg.content)}
         </Markdown>
-        {msg.pending && msg.content && <span aria-hidden className="ml-0.5 inline-block h-[1.05em] w-[0.5ch] translate-y-[0.15em] animate-pulse bg-graphite/70" />}
+        {msg.pending && msg.content && <span aria-hidden className="ml-0.5 inline-block h-[1.05em] w-[0.5ch] translate-y-[0.15em] animate-pulse bg-thread" />}
       </div>
       {!msg.pending && summary.total > 0 && (
         <p className={cn('mt-3 text-xs', summary.unsupported ? 'text-check' : 'text-muted-foreground')}>
@@ -86,7 +86,7 @@ function Thinking({ msg }: { msg: Message }) {
   }
   return (
     <p className="flex items-center gap-2.5 text-sm text-muted-foreground" aria-live="polite">
-      <span aria-hidden className="size-2 animate-pulse rounded-full bg-highlight ring-1 ring-graphite/30" />
+      <span aria-hidden className="size-2 animate-pulse rounded-full bg-thread shadow-[0_0_8px_var(--thread)]" />
       {last ? label[last] ?? 'Working' : 'Starting'}…
     </p>
   )
