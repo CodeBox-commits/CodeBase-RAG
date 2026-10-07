@@ -35,9 +35,12 @@ This project indexes code the way you read it:
 | Page | What it does |
 |---|---|
 | **Index** | Paste a public GitHub URL and watch it clone, parse, embed, store and link, with live progress for each stage. **Update** re-embeds only the files that changed since the last run; **Full rebuild** redoes everything. |
-| **Explore** | Walk the repository as a **code city**: each tower is a function, method or class, as tall as its code is long, standing on its file's plot. Click one to light up its calls, or ask **"What breaks if this changes?"** to light up its whole blast radius (callers, subclasses and overrides, up to 3 hops) with a per-file list. You can switch to a force-directed graph view, filter by file or search by name. |
+| **Explore** | Walk the repository as an **architectural massing model** in axonometric: each block is a function (white card), method (grey board) or class (basswood), as tall as its code is long, standing on its file's plot. Click one to pin it and draw its calls as threads, or ask **"What breaks if this changes?"** to light up its whole blast radius (callers, subclasses and overrides, up to 3 hops) with a per-file list. You can switch to a force-directed graph view, filter by file or search by name. |
 | **MCP** | Coding agents (Claude Code, Cursor and others) use the same code intelligence as tools: see [MCP server](#mcp-server). |
 | **Ask** | Ask in plain English, and follow up ("and what calls it?"). The answer streams in token by token next to a pipeline inspector, where you can open each step and see the plan, the search queries, the ranked hits, the reranker's reordering and the call tree. Every `file:line` citation is a chip marked verified or unverified; click it to open that code. |
+
+Press <kbd>⌘K</kbd> (or <kbd>Ctrl K</kbd>) anywhere to jump to a page, switch repository or find a symbol. The UI has a
+light theme (drafting film) and a dark one (a cyanotype of the same drawing), and follows your system setting by default.
 
 ## Architecture
 
@@ -85,7 +88,7 @@ This project indexes code the way you read it:
 | Embeddings | FastEmbed `bge-small-en-v1.5`, local and free (Gemini embeddings optional) |
 | Reranking | FlashRank cross-encoder, local, CPU-only |
 | Stores | Neo4j 5 (graph), Qdrant (vectors), Redis Stack / RediSearch (BM25 and cache) |
-| Frontend | React 19, TypeScript, Vite, three.js (custom shaders and bloom for the code city) |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, shadcn/ui (Radix), Motion, Shiki, cmdk, three.js (the repository as an architectural massing model) |
 | Ops | Docker Compose, GitHub Actions CI, GHCR release images, Caddy for production |
 
 ## Quick start

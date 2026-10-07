@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { cn } from '@/lib/utils'
 import type { GraphEdge, GraphNode } from '../api'
-
-import { EDGE_COLORS, KIND_COLORS } from '../palette'
-
-export { EDGE_COLORS, KIND_COLORS }
+import { useModelPalette } from '../palette'
 
 interface Props {
   nodes: GraphNode[]
@@ -18,23 +16,10 @@ interface Props {
 
 interface SimNode { id: string; pos: THREE.Vector3; vel: THREE.Vector3; node: GraphNode; degree: number }
 
-function glowTexture() {
-  const c = document.createElement('canvas')
-  c.width = c.height = 64
-  const ctx = c.getContext('2d')!
-  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
-  g.addColorStop(0, 'rgba(255,255,255,1)')
-  g.addColorStop(0.3, 'rgba(255,255,255,0.85)')
-  g.addColorStop(0.65, 'rgba(255,255,255,0.12)')
-  g.addColorStop(1, 'rgba(255,255,255,0)')
-  ctx.fillStyle = g
-  ctx.fillRect(0, 0, 64, 64)
-  return new THREE.CanvasTexture(c)
-}
-
 /**
  * Self-contained 3D force-directed graph: a small n-body layout (repulsion + springs +
- * centering) that settles over the first few seconds, rendered with additive glow points.
+ * centering) that settles over the first few seconds, drawn like an ink diagram: each node a
+ * disc in its kind's material with a graphite rim, edges as hairlines, calls in the thread colour.
  */
 export default function ForceGraph3D({
   nodes, edges, selected = null, highlight = null, onSelect, className, autoRotate = true,
@@ -45,6 +30,7 @@ export default function ForceGraph3D({
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
   const [hover, setHover] = useState<GraphNode | null>(null)
+  const pal = useModelPalette()
 
   useEffect(() => {
     const mount = mountRef.current
@@ -84,14 +70,13 @@ export default function ForceGraph3D({
       .filter((l): l is { a: number; b: number; type: string } => l.a !== undefined && l.b !== undefined && l.a !== l.b)
 
     // --- nodes -------------------------------------------------------------------
-    const glow = glowTexture()
     const positions = new Float32Array(sim.length * 3)
     const colors = new Float32Array(sim.length * 3)
     const baseColors = new Float32Array(sim.length * 3)
     const sizes = new Float32Array(sim.length)
     const col = new THREE.Color()
     sim.forEach((s, i) => {
-      col.setHex(KIND_COLORS[s.node.kind] ?? 0xc9d4ff)
+      col.setHex(pal.kinds[s.node.kind] ?? pal.kinds.method)
       col.toArray(baseColors, i * 3)
       col.toArray(colors, i * 3)
       sizes[i] = (s.node.anchor ? 6 : 3) + Math.min(s.degree, 20) * 0.35
@@ -101,22 +86,24 @@ export default function ForceGraph3D({
     nodeGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     nodeGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
     const nodeMat = new THREE.ShaderMaterial({
-      uniforms: { uTex: { value: glow }, uScale: { value: renderer.getPixelRatio() }, uTime: { value: 0 } },
+      uniforms: { uScale: { value: renderer.getPixelRatio() }, uRim: { value: new THREE.Color(pal.dark ? 0xffffff : pal.graphite) } },
       vertexShader: /* glsl */ `
-        attribute float size; varying vec3 vColor; uniform float uScale; uniform float uTime;
+        attribute float size; varying vec3 vColor; uniform float uScale;
         void main() {
           vColor = color;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * uScale * (240.0 / -mv.z) * (0.92 + 0.08 * sin(uTime * 2.0 + position.x));
+          gl_PointSize = size * uScale * (240.0 / -mv.z);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
-        uniform sampler2D uTex; varying vec3 vColor;
-        void main() { gl_FragColor = vec4(vColor, 1.0) * texture2D(uTex, gl_PointCoord); }`,
+        uniform vec3 uRim; varying vec3 vColor;
+        void main() {
+          float d = length(gl_PointCoord - 0.5) * 2.0;
+          if (d > 1.0) discard;
+          float rim = smoothstep(0.66, 0.78, d);
+          gl_FragColor = vec4(mix(vColor, uRim, rim * 0.85), 1.0);
+        }`,
       vertexColors: true,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
     })
     const points = new THREE.Points(nodeGeo, nodeMat)
     world.add(points)
@@ -126,7 +113,7 @@ export default function ForceGraph3D({
     const lineCol = new Float32Array(links.length * 6)
     const lineBase = new Float32Array(links.length * 6)
     links.forEach((l, k) => {
-      col.setHex(EDGE_COLORS[l.type] ?? 0x8890b0)
+      col.setHex(l.type === 'CALLS' ? pal.pencil : pal.edges[l.type] ?? pal.pencil)
       col.toArray(lineBase, k * 6)
       col.toArray(lineBase, k * 6 + 3)
     })
@@ -134,9 +121,7 @@ export default function ForceGraph3D({
     const lineGeo = new THREE.BufferGeometry()
     lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3))
     lineGeo.setAttribute('color', new THREE.BufferAttribute(lineCol, 3))
-    const lineMat = new THREE.LineBasicMaterial({
-      vertexColors: true, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false,
-    })
+    const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.45, depthWrite: false })
     world.add(new THREE.LineSegments(lineGeo, lineMat))
 
     // Particles travelling along edges in their direction (caller → callee).
@@ -145,9 +130,7 @@ export default function ForceGraph3D({
     const flowPos = new Float32Array(FLOW * 3)
     const flowGeo = new THREE.BufferGeometry()
     flowGeo.setAttribute('position', new THREE.BufferAttribute(flowPos, 3))
-    const flowMat = new THREE.PointsMaterial({
-      size: 1.1, map: glow, color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending,
-    })
+    const flowMat = new THREE.PointsMaterial({ size: 0.9, color: pal.thread, transparent: true, opacity: 0.9, depthWrite: false })
     world.add(new THREE.Points(flowGeo, flowMat))
 
     // --- focus (selection + highlight) --------------------------------------------
@@ -163,16 +146,23 @@ export default function ForceGraph3D({
         })
       }
       focusSet = set
+      const fade = new THREE.Color(pal.dark ? 0x10295c : 0xe6e9e4)
+      const thread = new THREE.Color(pal.thread)
       sim.forEach((s, i) => {
-        const dim = set && !set.has(s.id) ? 0.12 : 1
-        const boost = sel === s.id ? 1.6 : 1
-        for (let c = 0; c < 3; c++) colors[i * 3 + c] = Math.min(baseColors[i * 3 + c] * dim * boost, 1.6)
+        col.fromArray(baseColors, i * 3)
+        if (sel === s.id) col.lerp(thread, 0.7)
+        else if (set && !set.has(s.id)) col.lerp(fade, 0.8)
+        col.toArray(colors, i * 3)
       })
       nodeGeo.attributes.color.needsUpdate = true
       links.forEach((l, k) => {
         const on = !set || (set.has(sim[l.a].id) && set.has(sim[l.b].id))
-        const f = on ? (set ? 1.6 : 1) : 0.06
-        for (let c = 0; c < 6; c++) lineCol[k * 6 + c] = lineBase[k * 6 + c] * f
+        // In focus, calls are drawn in the thread colour, like the threads in the model.
+        if (on && set && l.type === 'CALLS') col.copy(thread)
+        else col.fromArray(lineBase, k * 6)
+        if (!on) col.lerp(fade, 0.9)
+        col.toArray(lineCol, k * 6)
+        col.toArray(lineCol, k * 6 + 3)
       })
       lineGeo.attributes.color.needsUpdate = true
     }
@@ -363,28 +353,30 @@ export default function ForceGraph3D({
       el.removeEventListener('pointerleave', onLeave)
       ;[nodeGeo, lineGeo, flowGeo].forEach((g) => g.dispose())
       ;[nodeMat, lineMat, flowMat].forEach((m) => m.dispose())
-      glow.dispose()
       renderer.dispose()
       mount.removeChild(el)
       apiRef.current = null
     }
     // The scene is rebuilt only when the graph itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges])
+  }, [nodes, edges, pal])
 
   useEffect(() => {
     apiRef.current?.setFocus(selected, highlight)
-  }, [selected, highlight, nodes, edges])
+  }, [selected, highlight, nodes, edges, pal])
 
   return (
-    <div className={`fg3d ${className ?? ''}`}>
-      <div ref={mountRef} className="fg3d-canvas" />
-      <div ref={labelRef} className="fg3d-label" aria-hidden>
+    <div className={cn('relative overflow-hidden', className)}>
+      <div ref={mountRef} className="absolute inset-0 [&>canvas]:block [&>canvas]:size-full" />
+      <div ref={labelRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-10 opacity-0 transition-opacity duration-150">
         {hover && (
-          <>
-            <strong>{hover.name ?? hover.id}</strong>
-            <span>{hover.kind}{hover.filepath ? ` · ${hover.filepath}` : ''}</span>
-          </>
+          <div className="-translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-md border bg-popover px-2.5 py-1.5 shadow-sm">
+            <div className="font-mono text-[0.78rem] font-medium">{hover.name ?? hover.id}</div>
+            <div className="text-[0.7rem] text-muted-foreground">
+              {hover.kind}
+              {hover.filepath ? <> in <span className="font-mono">{hover.filepath}</span></> : null}
+            </div>
+          </div>
         )}
       </div>
     </div>

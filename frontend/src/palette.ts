@@ -1,27 +1,77 @@
-// Colours shared by the three.js scenes and the CSS (keep in sync with :root in index.css).
+import { useMemo } from 'react'
+import { useTheme } from './theme'
 
-export const CITY = {
-  ground: 0x140f2e, // --ink
-  body: 0x1a1440, // tower glass, before its neon edges and windows
-  plot: 0x1b1540, // file plots, a step up from the ground
-  plotEdge: 0x4a3c8c,
-  grid: 0x221b4a,
-  gridMajor: 0x3a2f6e,
-  lit: 0xb18cff, // --lit: the one "lit" colour (selection, active calls)
-  unknown: 0xa49cc8,
+// The three.js scenes read their colours from the same CSS variables as the UI (styles.css),
+// so the model follows the theme: card and basswood on drafting film, or a cyanotype.
+
+export interface ModelPalette {
+  dark: boolean
+  ground: number
+  plot: number
+  shadow: number
+  graphite: number
+  pencil: number
+  rule: number
+  thread: number
+  highlight: number
+  kinds: Record<string, number>
+  edges: Record<string, number>
 }
 
-export const KIND_COLORS: Record<string, number> = {
-  class: 0xff7aa8, // rose
-  method: 0x5fd6f2, // cyan
-  function: 0xa3ee7f, // lime
+function cssColor(styles: CSSStyleDeclaration, name: string, fallback: string): number {
+  const raw = styles.getPropertyValue(name).trim() || fallback
+  // Only #rrggbb is used for these variables.
+  return Number.parseInt(raw.replace('#', '').slice(0, 6), 16)
 }
 
-export const EDGE_COLORS: Record<string, number> = {
-  CALLS: 0xb18cff,
-  INHERITS: 0xff7aa8,
-  HAS_METHOD: 0x4a3c8c,
-  OVERRIDES: 0xffc66d, // amber: only in the Ask graph, derived from INHERITS + same-named methods
+export function readPalette(): ModelPalette {
+  const s = getComputedStyle(document.documentElement)
+  const c = (name: string, fallback: string) => cssColor(s, name, fallback)
+  const dark = document.documentElement.classList.contains('dark')
+  const thread = c('--thread', '#1233c4')
+  return {
+    dark,
+    ground: c('--model-ground', '#dfe3dd'),
+    plot: c('--model-plot', '#eceee9'),
+    shadow: c('--model-shadow', '#9aa39a'),
+    graphite: c('--graphite', '#1d2128'),
+    pencil: c('--pencil', '#575f6b'),
+    rule: c('--rule', '#c6ccc4'),
+    thread,
+    highlight: c('--highlight', '#ffe15c'),
+    kinds: {
+      function: c('--kind-function', '#fbfbf8'),
+      method: c('--kind-method', '#cfd5cf'),
+      class: c('--kind-class', '#c8b28c'),
+    },
+    edges: {
+      CALLS: thread,
+      INHERITS: c('--pencil', '#575f6b'),
+      HAS_METHOD: c('--rule', '#c6ccc4'),
+      OVERRIDES: dark ? 0xffc78a : 0x9a6a14,
+    },
+  }
+}
+
+/** The palette for the current theme; a new object (so scenes rebuild) only when the theme changes. */
+export function useModelPalette(): ModelPalette {
+  const { theme } = useTheme()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => readPalette(), [theme])
 }
 
 export const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`
+
+/** CSS for each symbol kind and edge type, for legends and lists (same meaning as in the model). */
+export const KIND_VAR: Record<string, string> = {
+  function: 'var(--kind-function)',
+  method: 'var(--kind-method)',
+  class: 'var(--kind-class)',
+}
+export const EDGE_LABEL: Record<string, string> = {
+  CALLS: 'calls',
+  INHERITS: 'inherits',
+  HAS_METHOD: 'has method',
+  OVERRIDES: 'overrides',
+}
+

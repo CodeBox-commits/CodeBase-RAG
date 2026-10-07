@@ -5,11 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Codebase RAG</title>
-    <meta name="description" content="Ask questions about any Python codebase. AST parsing, a resolved call graph and hybrid search, with file-and-line citations." />
-    <meta name="theme-color" content="#140f2e" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <meta name="description" content="Index a Python, JavaScript or TypeScript repository, walk it as a model city, and ask questions answered with checked file-and-line citations." />
+    <meta name="theme-color" content="#e6e9e4" />
+    <script>
+      // Apply the saved or system theme before first paint (no light flash in dark mode).
+      try {
+        var c = JSON.parse(localStorage.getItem('theme') || '"system"')
+        var dark = c === 'dark' || (c === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

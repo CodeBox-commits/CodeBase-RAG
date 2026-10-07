@@ -1,32 +1,24 @@
-// A small isometric block of towers for empty states: the code city, before anything is built.
-
-const TOWERS = [
-  { x: 0, y: 0, h: 34, c: 'var(--cyan)' },
-  { x: 1, y: 0, h: 18, c: 'var(--lime)' },
-  { x: 0, y: 1, h: 22, c: 'var(--rose)' },
-  { x: 1, y: 1, h: 46, c: 'var(--lit)' },
-  { x: 2, y: 0, h: 12, c: 'var(--cyan)' },
-  { x: 2, y: 1, h: 26, c: 'var(--lime)' },
-]
-
-export default function MiniCity({ small = false }: { small?: boolean }) {
-  const size = small ? 72 : 120
-  // Painter's order: back rows first.
-  const order = [...TOWERS].sort((a, b) => a.x + a.y - (b.x + b.y))
+// An empty base board with a few blocks in pencil outline: the model before anything is built.
+export default function MiniCity({ className }: { className?: string }) {
+  const blocks = [
+    { x: 0, y: 0, h: 30 }, { x: 1, y: 0, h: 16 }, { x: 0, y: 1, h: 20 }, { x: 1, y: 1, h: 42 }, { x: 2, y: 0, h: 11 }, { x: 2, y: 1, h: 24 },
+  ].sort((a, b) => a.x + a.y - (b.x + b.y))
+  const iso = (x: number, y: number) => [(x - y) * 17, (x + y) * 9.5] as const
+  const board = [iso(-0.7, -0.7), iso(3.1, -0.7), iso(3.1, 2.1), iso(-0.7, 2.1)].map(([a, b]) => `${a},${b}`).join(' ')
   return (
-    <svg className="mini-city" width={size} height={size} viewBox="-60 -70 120 120" aria-hidden>
-      {order.map((t, i) => {
-        const cx = (t.x - t.y) * 16
-        const cy = (t.x + t.y) * 9
-        const w = 11, d = 6.5
+    <svg viewBox="-80 -64 160 120" className={className} aria-hidden>
+      <polygon points={board} className="fill-sheet stroke-rule" strokeWidth="1" />
+      {blocks.map((t, i) => {
+        const [cx, cy] = iso(t.x, t.y)
+        const w = 11, d = 6.2
         const top = `${cx},${cy - t.h - d} ${cx + w},${cy - t.h} ${cx},${cy - t.h + d} ${cx - w},${cy - t.h}`
         const left = `${cx - w},${cy - t.h} ${cx},${cy - t.h + d} ${cx},${cy + d} ${cx - w},${cy}`
         const right = `${cx + w},${cy - t.h} ${cx},${cy - t.h + d} ${cx},${cy + d} ${cx + w},${cy}`
         return (
-          <g key={i} style={{ color: t.c }}>
-            <polygon points={left} fill="currentColor" opacity="0.55" />
-            <polygon points={right} fill="currentColor" opacity="0.8" />
-            <polygon points={top} fill="currentColor" />
+          <g key={i} className="stroke-pencil/60" strokeWidth="0.8" strokeDasharray={i % 2 ? '2 2' : undefined}>
+            <polygon points={left} className="fill-sheet-2" />
+            <polygon points={right} className="fill-background" />
+            <polygon points={top} className="fill-sheet" />
           </g>
         )
       })}

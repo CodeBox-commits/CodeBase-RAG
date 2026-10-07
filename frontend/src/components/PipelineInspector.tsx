@@ -1,21 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, Minus, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 import type { ExpandedHit, GraphEdge, GraphNode, RetrievedHit, StepEvent, StepNode } from '../api'
+import { KIND_VAR } from '../palette'
 import type { Message } from '../state'
-import ForceGraph3D, { EDGE_COLORS, KIND_COLORS } from './ForceGraph3D'
+import ForceGraph3D from './ForceGraph3D'
 import MiniCity from './MiniCity'
-
-const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`
 
 type UiStep = StepNode | 'generate'
 const STEPS: { node: UiStep; label: string; sub: string }[] = [
-  { node: 'query_planner', label: 'Plan query', sub: 'LLM classifies intent, extracts symbols, writes search queries' },
-  { node: 'retrieval_router', label: 'Route', sub: 'Chooses vector, hybrid or graph-heavy retrieval' },
-  { node: 'embed_queries', label: 'Embed queries', sub: 'Turns each search query into a vector, cached in Redis' },
-  { node: 'retrieve', label: 'Search & fuse', sub: 'Qdrant vector lists + RediSearch BM25 → Reciprocal Rank Fusion' },
-  { node: 'rerank', label: 'Rerank', sub: 'Local cross-encoder (MiniLM-L-12) rescores each candidate against the question' },
-  { node: 'graph_search', label: 'Traverse graph', sub: 'Neo4j: callers, callees, overrides; pulls in the code they point to' },
-  { node: 'fetch_more', label: 'Ask for more', sub: 'The model named code it was missing; it was fetched before answering' },
-  { node: 'generate', label: 'Generate answer', sub: 'Grounded answer with file:line citations' },
+  { node: 'query_planner', label: 'Plan', sub: 'What kind of question this is, which symbols it names, and what to search for.' },
+  { node: 'retrieval_router', label: 'Choose a route', sub: 'How much to lean on keyword search and on the call graph.' },
+  { node: 'embed_queries', label: 'Embed the queries', sub: 'Each search query becomes a vector (cached, so repeats are free).' },
+  { node: 'retrieve', label: 'Search', sub: 'Vector search and BM25 run side by side and are merged by rank.' },
+  { node: 'rerank', label: 'Rerank', sub: 'A local cross-encoder reads each candidate next to the question.' },
+  { node: 'graph_search', label: 'Walk the graph', sub: 'Callers, callees and overrides, and the code they point to.' },
+  { node: 'fetch_more', label: 'Ask for more', sub: 'The model named code it was missing; it was fetched before answering.' },
+  { node: 'generate', label: 'Answer and check', sub: 'Written from that context only; every citation checked against it.' },
 ]
 
 type StepState = 'pending' | 'active' | 'done' | 'failed'
@@ -27,8 +30,7 @@ function stepsFor(msg: Message) {
 }
 
 function stepStates(msg: Message): Record<UiStep, StepState> {
-  const trace = msg.trace ?? []
-  const seen = new Map(trace.map((e) => [e.node, e]))
+  const seen = new Set((msg.trace ?? []).map((e) => e.node))
   const out = {} as Record<UiStep, StepState>
   let activeGiven = false
   stepsFor(msg).forEach(({ node }) => {
@@ -46,192 +48,187 @@ function stepStates(msg: Message): Record<UiStep, StepState> {
   return out
 }
 
-// ---------------------------------------------------------------------------
+// --- small parts ------------------------------------------------------------------------
 
-function Chips({ items, className = '' }: { items: string[]; className?: string }) {
-  if (!items.length) return <span className="muted small">none</span>
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="chips-row">
-      {items.map((t, i) => <span key={t + i} className={`tchip ${className}`} style={{ animationDelay: `${i * 60}ms` }}>{t}</span>)}
+    <div className="grid grid-cols-[6.5rem_1fr] items-baseline gap-3 py-1 text-[0.8rem]">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="min-w-0">{children}</dd>
     </div>
   )
 }
 
-function PlanPanel({ data }: { data: Record<string, any> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function Tokens({ items, mono = true }: { items: string[]; mono?: boolean }) {
+  if (!items.length) return <span className="text-muted-foreground">none</span>
   return (
-    <div className="step-panel">
-      <div className="kv"><span>Intent</span><b className="intent">{String(data.query_type).replace('_', ' ')}</b></div>
-      <div className="kv"><span>Complexity</span><b>{data.complexity}</b></div>
-      <div className="kv col"><span>Symbols</span><Chips items={data.symbols ?? []} className="sym" /></div>
-      <div className="kv col">
-        <span>Search queries</span>
-        <ol className="query-list">
-          {(data.queries ?? []).map((q: string, i: number) => (
-            <li key={q} style={{ animationDelay: `${i * 120}ms` }}><span className="mono">q{i}</span>{q}</li>
-          ))}
-        </ol>
-      </div>
-    </div>
+    <span className="flex flex-wrap gap-1">
+      {items.map((t, i) => (
+        <span key={t + i} className={cn('rounded-[4px] border bg-background/60 px-1.5 py-px text-[0.74rem]', mono && 'font-mono')}>{t}</span>
+      ))}
+    </span>
   )
+}
+
+function Hit({ rank, symbol, location, children }: { rank: ReactNode; symbol: string; location: string; children?: ReactNode }) {
+  return (
+    <li className="grid grid-cols-[1.5rem_1fr] gap-2 py-1.5">
+      <span className="pt-0.5 text-right text-[0.72rem] text-muted-foreground tabular-nums">{rank}</span>
+      <div className="min-w-0">
+        <div className="truncate font-mono text-[0.78rem] font-medium">{symbol}</div>
+        <div className="truncate font-mono text-[0.7rem] text-muted-foreground">{location}</div>
+        {children}
+      </div>
+    </li>
+  )
+}
+
+function Bar({ value, className }: { value: number; className?: string }) {
+  return (
+    <span className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-rule-soft" aria-hidden>
+      <span className={cn('block h-full rounded-full bg-pencil/70', className)} style={{ width: `${Math.max(3, Math.min(1, value) * 100)}%` }} />
+    </span>
+  )
+}
+
+// --- one panel per step ------------------------------------------------------------------
+
+type Data = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+
+function PlanPanel({ data }: { data: Data }) {
+  return (
+    <dl>
+      <Row label="Question type"><span className="capitalize">{String(data.query_type ?? '').replaceAll('_', ' ')}</span>, {data.complexity}</Row>
+      <Row label="Symbols named"><Tokens items={data.symbols ?? []} /></Row>
+      <Row label="Searching for">
+        <ol className="space-y-1">
+          {(data.queries ?? []).map((q: string) => <li key={q} className="leading-snug">{q}</li>)}
+        </ol>
+      </Row>
+    </dl>
+  )
+}
+
+const ROUTES: Record<string, string> = {
+  vector: 'A question about one symbol: semantic search plus an exact name lookup, then one step through the graph.',
+  hybrid: 'A question about relationships or structure: full keyword search alongside vectors, then three steps through the graph.',
+  graph: 'A question about call flow or impact: retrieval anchors a deep walk of the call graph.',
 }
 
 function RoutePanel({ strategy }: { strategy: string }) {
-  const branches = ['vector', 'hybrid', 'graph']
-  const ys = [26, 70, 114]
   return (
-    <div className="step-panel">
-      <svg viewBox="0 0 320 140" className="route-svg" role="img" aria-label={`Strategy: ${strategy}`}>
-        <circle cx="30" cy="70" r="9" className="route-root" />
-        {branches.map((b, i) => {
-          const on = b === strategy
-          return (
-            <g key={b} className={on ? 'on' : ''}>
-              <path d={`M39 70 C 110 70, 110 ${ys[i]}, 180 ${ys[i]}`} className="route-path" />
-              <rect x="186" y={ys[i] - 13} width="110" height="26" rx="13" className="route-pill" />
-              <text x="241" y={ys[i] + 4} textAnchor="middle" className="route-text">{b}</text>
-            </g>
-          )
-        })}
-      </svg>
-      <p className="muted small">
-        {strategy === 'vector' && 'Symbol or implementation question: semantic search plus exact symbol lookup, then a 1-hop graph walk.'}
-        {strategy === 'hybrid' && 'Relationship or architecture question: full BM25 + vectors, then a 3-hop graph walk.'}
-        {strategy === 'graph' && 'Call-flow question: retrieval anchors a deep walk of the call graph.'}
-      </p>
+    <div>
+      <div className="flex gap-1" role="img" aria-label={`Route: ${strategy}`}>
+        {(['vector', 'hybrid', 'graph'] as const).map((r) => (
+          <span
+            key={r}
+            className={cn(
+              'flex-1 rounded-md border px-2 py-1 text-center text-[0.76rem]',
+              r === strategy ? 'border-graphite bg-graphite text-sheet' : 'text-muted-foreground',
+            )}
+          >
+            {r}
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 text-[0.8rem] leading-snug text-muted-foreground">{ROUTES[strategy]}</p>
     </div>
   )
 }
 
-function Fingerprint({ values, delay }: { values: number[]; delay: number }) {
+/** The first dimensions of a query vector as a bar code: what "turning text into numbers" looks like. */
+function Fingerprint({ values }: { values: number[] }) {
   const max = Math.max(...values.map(Math.abs), 1e-6)
   return (
-    <div className="fingerprint" aria-hidden>
+    <span className="mt-1.5 flex h-6 items-center gap-px" aria-hidden>
       {values.map((v, i) => (
-        <span
-          key={i}
-          className={v >= 0 ? 'pos' : 'neg'}
-          style={{ height: `${10 + (Math.abs(v) / max) * 90}%`, animationDelay: `${delay + i * 18}ms` }}
-        />
+        <span key={i} className="flex h-full flex-1 flex-col justify-center">
+          <span
+            className={cn('w-full rounded-[1px]', v >= 0 ? 'self-end bg-graphite/70' : 'bg-pencil/40')}
+            style={{ height: `${8 + (Math.abs(v) / max) * 42}%`, marginTop: v >= 0 ? 'auto' : undefined }}
+          />
+        </span>
       ))}
-    </div>
+    </span>
   )
 }
 
-function EmbedPanel({ data }: { data: Record<string, any> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function EmbedPanel({ data }: { data: Data }) {
   const previews: number[][] = data.previews ?? []
   return (
-    <div className="step-panel">
-      <div className="kv"><span>Vectors</span><b>{previews.length} × {data.dimensions}-d</b></div>
+    <div className="space-y-3">
+      <p className="text-[0.8rem] text-muted-foreground">
+        {previews.length} {previews.length === 1 ? 'vector' : 'vectors'} of {data.dimensions} numbers each. The bars are the first 24.
+      </p>
       {(data.queries ?? []).map((q: string, i: number) => (
-        <div key={q} className="embed-row">
-          <span className="embed-q"><span className="mono">q{i}</span>{q}</span>
-          {previews[i] && <Fingerprint values={previews[i]} delay={i * 150} />}
+        <div key={q}>
+          <p className="text-[0.8rem] leading-snug">{q}</p>
+          {previews[i] && <Fingerprint values={previews[i]} />}
         </div>
       ))}
-      <p className="muted tiny">First 24 of {data.dimensions} dimensions shown.</p>
     </div>
   )
 }
 
-function RetrievePanel({ data }: { data: Record<string, any> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function RetrievePanel({ data }: { data: Data }) {
   const results: RetrievedHit[] = data.results ?? []
-  const lists: number = data.vector_lists ?? 0
   const terms: string[] = data.lexical_terms ?? []
   return (
-    <div className="step-panel">
-      <div className="fusion-diagram">
-        <div className="fusion-sources">
-          {Array.from({ length: lists }, (_, i) => (
-            <span key={i} className="src vec" style={{ animationDelay: `${i * 100}ms` }}>Qdrant · q{i}</span>
-          ))}
-          {terms.length > 0 && (
-            <span className="src bm25" style={{ animationDelay: `${lists * 100}ms` }}>
-              BM25 · {(data.lexical_fields ?? []).join('|')}
-            </span>
-          )}
-        </div>
-        <div className="fusion-arrow" aria-hidden><span /></div>
-        <div className="fusion-sink">RRF<small>k = 60</small></div>
-      </div>
-      {terms.length > 0 && <div className="kv col"><span>BM25 terms</span><Chips items={terms} /></div>}
-      <div className="kv col">
-        <span>Fused candidates ({results.length})</span>
-        {results.length === 0 && <span className="muted small">No matches above the similarity threshold.</span>}
-        <ol className="ranked">
-          {results.map((r, i) => (
-            <li key={`${r.filepath}:${r.symbol}:${r.start_line}`} style={{ animationDelay: `${i * 70}ms` }}>
-              <span className="rank">{i + 1}</span>
-              <div className="ranked-body">
-                <div className="ranked-top">
-                  <span className="ranked-sym">{r.symbol}</span>
-                  <span className="ranked-src">
-                    {r.sources.map((s) => <i key={s} className={`badge ${s}`}>{s}</i>)}
-                  </span>
-                </div>
-                <div className="ranked-loc mono">{r.filepath}:{r.start_line}</div>
-                <div className="score-bar"><span style={{ width: `${Math.max(4, (r.score ?? 0) * 100)}%` }} /></div>
-                <div className="score-meta mono">
-                  fused {(r.score ?? 0).toFixed(3)}
-                  {r.vector_score != null && <> · cos {r.vector_score.toFixed(3)}</>}
-                  {r.bm25_score != null && <> · bm25 {r.bm25_score.toFixed(1)}</>}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
+    <div>
+      <dl>
+        <Row label="Vector lists">{data.vector_lists ?? 0}, one per query</Row>
+        <Row label="Keyword terms"><Tokens items={terms} /></Row>
+        <Row label="Merged">by rank (reciprocal rank fusion, k = 60) into {results.length} candidates</Row>
+      </dl>
+      {results.length === 0 && <p className="mt-2 text-[0.8rem] text-muted-foreground">Nothing scored above the similarity threshold.</p>}
+      <ol className="mt-2 divide-y divide-rule-soft">
+        {results.map((r, i) => (
+          <Hit key={`${r.filepath}:${r.symbol}:${r.start_line}`} rank={i + 1} symbol={r.symbol} location={`${r.filepath}:${r.start_line}`}>
+            <Bar value={r.score ?? 0} />
+            <p className="mt-1 text-[0.7rem] text-muted-foreground">
+              Found by {r.sources.join(' and ')}
+              {r.vector_score != null && `, similarity ${r.vector_score.toFixed(2)}`}
+              {r.bm25_score != null && `, BM25 ${r.bm25_score.toFixed(1)}`}
+            </p>
+          </Hit>
+        ))}
+      </ol>
     </div>
   )
 }
 
-function RerankPanel({ data }: { data: Record<string, any> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function RerankPanel({ data }: { data: Data }) {
   const results: RetrievedHit[] = data.results ?? []
   return (
-    <div className="step-panel">
-      <div className="kv"><span>Model</span><b className="mono">{data.model ?? 'disabled'}</b></div>
-      <div className="kv">
-        <span>Kept</span>
-        <b>{data.kept} of {data.candidates}{data.ms != null && <span className="muted"> · {data.ms} ms</span>}</b>
-      </div>
-      {!data.applied && (
-        <p className="warn small">Reranker not applied{data.error ? `: ${data.error}` : ''}. Retrieval order kept.</p>
-      )}
-      <ol className="ranked rerank-list">
+    <div>
+      <p className="text-[0.8rem] text-muted-foreground">
+        Kept {data.kept} of {data.candidates}
+        {data.ms != null && ` in ${Math.round(data.ms)} ms`}, using <span className="font-mono">{data.model ?? 'no reranker'}</span>.
+      </p>
+      {!data.applied && <p className="mt-1.5 text-[0.8rem] text-check">Not applied{data.error ? `: ${data.error}` : ''}. The search order was kept.</p>}
+      <ol className="mt-2 divide-y divide-rule-soft">
         {results.map((r, i) => {
           const moved = (r.retrieval_rank ?? i + 1) - (i + 1)
           return (
-            <li key={`${r.filepath}:${r.symbol}:${r.start_line}`} style={{ animationDelay: `${i * 70}ms` }}>
-              <span className="rank">{i + 1}</span>
-              <div className="ranked-body">
-                <div className="ranked-top">
-                  <span className="ranked-sym">{r.symbol}</span>
-                  <span className={`move ${moved > 0 ? 'up' : moved < 0 ? 'down' : ''}`} title={`Was #${r.retrieval_rank}`}>
-                    {moved > 0 ? `▲${moved}` : moved < 0 ? `▼${-moved}` : '='}
-                  </span>
-                </div>
-                <div className="ranked-loc mono">{r.filepath}:{r.start_line}</div>
-                {r.rerank_score != null && (
-                  <div className="dual-bar" aria-hidden>
-                    <span className="ce" style={{ width: `${Math.max(3, r.rerank_score * 100)}%` }} />
-                    <span className="rt" style={{ width: `${Math.max(3, (r.retrieval_score ?? 0) * 100)}%` }} />
-                  </div>
-                )}
-                <div className="score-meta mono">
-                  final {(r.score ?? 0).toFixed(3)}
-                  {r.rerank_score != null && <> · cross-enc {r.rerank_score.toFixed(3)}</>}
-                  {r.retrieval_score != null && <> · fused {r.retrieval_score.toFixed(3)} (#{r.retrieval_rank})</>}
-                </div>
-              </div>
-            </li>
+            <Hit key={`${r.filepath}:${r.symbol}:${r.start_line}`} rank={i + 1} symbol={r.symbol} location={`${r.filepath}:${r.start_line}`}>
+              <span className="mt-1 flex items-center gap-1 text-[0.7rem] text-muted-foreground">
+                {moved > 0 ? <ArrowUp className="size-3 text-verified" /> : moved < 0 ? <ArrowDown className="size-3 text-check" /> : <Minus className="size-3" />}
+                {moved === 0 ? 'Same place as in search' : `${moved > 0 ? 'Up' : 'Down'} ${Math.abs(moved)} from #${r.retrieval_rank}`}
+              </span>
+            </Hit>
           )
         })}
       </ol>
-      {data.applied && <p className="muted tiny">Final = {data.weight} × cross-encoder + {(1 - data.weight).toFixed(2)} × fused retrieval score.</p>}
+      {data.applied && (
+        <p className="mt-2 text-[0.72rem] text-muted-foreground">
+          Final score: {data.weight} of the cross-encoder's plus {(1 - data.weight).toFixed(2)} of the search score.
+        </p>
+      )}
     </div>
   )
 }
 
-/** Callers → symbol → callees, drawn as a three-column tree. */
+/** Callers on the left, what was retrieved in the middle, what it calls on the right. */
 function CallTree({ nodes, edges }: { nodes: GraphNode[]; edges: GraphEdge[] }) {
   const layout = useMemo(() => {
     const anchors = nodes.filter((n) => n.anchor).slice(0, 6)
@@ -243,21 +240,24 @@ function CallTree({ nodes, edges }: { nodes: GraphNode[]; edges: GraphEdge[] }) 
       if (anchorIds.has(e.source) && !anchorIds.has(e.target) && !right.includes(e.target)) right.push(e.target)
     })
     const cols = [left.slice(0, 10), anchors.map((a) => a.id), right.slice(0, 10)]
-    const H = Math.max(...cols.map((c) => c.length), 1) * 34 + 20
+    const H = Math.max(...cols.map((c) => c.length), 1) * 32 + 28
     const pos = new Map<string, { x: number; y: number }>()
     const xs = [80, 290, 500]
-    cols.forEach((col, ci) => col.forEach((id, i) => pos.set(id, { x: xs[ci], y: ((i + 0.5) * (H - 20)) / col.length + 10 })))
+    cols.forEach((col, ci) => col.forEach((id, i) => pos.set(id, { x: xs[ci], y: 22 + ((i + 0.5) * (H - 28)) / col.length })))
     const kind = new Map(nodes.map((n) => [n.id, n.kind]))
     const drawn = edges.filter((e) => pos.has(e.source) && pos.has(e.target))
     return { cols, pos, H, kind, drawn }
   }, [nodes, edges])
 
-  const short = (id: string) => (id.length > 22 ? '…' + id.slice(-21) : id)
+  const short = (id: string) => {
+    const name = id.split('::').pop() ?? id
+    return name.length > 20 ? '…' + name.slice(-19) : name
+  }
   return (
-    <svg viewBox={`0 0 580 ${layout.H}`} className="call-tree" role="img" aria-label="Call tree">
-      <text x="80" y="10" className="col-title">callers</text>
-      <text x="290" y="10" className="col-title">retrieved</text>
-      <text x="500" y="10" className="col-title">callees · members</text>
+    <svg viewBox={`0 0 580 ${layout.H}`} className="w-full" role="img" aria-label="Callers, retrieved symbols and what they call">
+      {[['callers', 80], ['retrieved', 290], ['calls and members', 500]].map(([t, x]) => (
+        <text key={t} x={x} y="10" textAnchor="middle" className="fill-muted-foreground text-[10px]">{t}</text>
+      ))}
       {layout.drawn.map((e, i) => {
         const a = layout.pos.get(e.source)!, b = layout.pos.get(e.target)!
         const mx = (a.x + b.x) / 2
@@ -265,18 +265,24 @@ function CallTree({ nodes, edges }: { nodes: GraphNode[]; edges: GraphEdge[] }) 
           <path
             key={i}
             d={`M${a.x + 70} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x - 70} ${b.y}`}
-            className="tree-edge"
-            stroke={hex(EDGE_COLORS[e.type] ?? 0x8890b0)}
-            style={{ animationDelay: `${i * 40}ms` }}
+            fill="none"
+            strokeWidth={e.type === 'CALLS' ? 1.4 : 1}
+            strokeDasharray={e.type === 'CALLS' ? undefined : '3 3'}
+            className={e.type === 'CALLS' ? 'stroke-thread' : 'stroke-pencil/60'}
           />
         )
       })}
-      {layout.cols.flatMap((col, ci) => col.map((id, i) => {
+      {layout.cols.flatMap((col, ci) => col.map((id) => {
         const p = layout.pos.get(id)!
         return (
-          <g key={id + ci} className={`tree-node ${ci === 1 ? 'anchor' : ''}`} style={{ animationDelay: `${ci * 150 + i * 40}ms` }}>
-            <rect x={p.x - 70} y={p.y - 12} width="140" height="24" rx="7" stroke={hex(KIND_COLORS[layout.kind.get(id) ?? ''] ?? 0x8890b0)} />
-            <text x={p.x} y={p.y + 4} textAnchor="middle"><title>{id}</title>{short(id)}</text>
+          <g key={id + ci}>
+            <rect
+              x={p.x - 70} y={p.y - 11} width="140" height="22" rx="4"
+              className={ci === 1 ? 'stroke-graphite' : 'stroke-rule'}
+              strokeWidth={ci === 1 ? 1.4 : 1}
+              fill={KIND_VAR[layout.kind.get(id) ?? ''] ?? 'var(--sheet)'}
+            />
+            <text x={p.x} y={p.y + 3.5} textAnchor="middle" className="fill-[#1d2128] font-mono text-[10px]"><title>{id}</title>{short(id)}</text>
           </g>
         )
       }))}
@@ -284,52 +290,56 @@ function CallTree({ nodes, edges }: { nodes: GraphNode[]; edges: GraphEdge[] }) 
   )
 }
 
-function GraphPanel({ data }: { data: Record<string, any> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function GraphPanel({ data }: { data: Data }) {
   const [mode, setMode] = useState<'tree' | '3d'>('tree')
   const nodes: GraphNode[] = data.nodes ?? []
   const edges: GraphEdge[] = data.edges ?? []
   const expanded: ExpandedHit[] = data.expanded ?? []
   const impact: { name: string; total: number; truncated: boolean; depth: number; files: { filepath: string; count: number }[] }[] = data.impact ?? []
-  if (!nodes.length && !expanded.length && !impact.length) return <div className="step-panel"><span className="muted small">No structural relationships found for these symbols.</span></div>
+  if (!nodes.length && !expanded.length && !impact.length) {
+    return <p className="text-[0.8rem] text-muted-foreground">No calls, bases or overrides were found for these symbols.</p>
+  }
   return (
-    <div className="step-panel">
+    <div className="space-y-4">
       {nodes.length > 0 && (
-        <>
-          <div className="panel-toolbar">
-            <span className="muted small">
-              {nodes.length} symbols · {edges.length} relationships{data.depth ? ` · ${data.depth} hop${data.depth > 1 ? 's' : ''}` : ''}
-            </span>
-            <div className="seg">
-              <button className={mode === 'tree' ? 'on' : ''} onClick={() => setMode('tree')}>Tree</button>
-              <button className={mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>3D</button>
-            </div>
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[0.8rem] text-muted-foreground">
+              {nodes.length} symbols and {edges.length} links{data.depth ? `, up to ${data.depth} ${data.depth > 1 ? 'steps' : 'step'} away` : ''}
+            </p>
+            <ToggleGroup type="single" size="sm" variant="outline" value={mode} onValueChange={(v) => v && setMode(v as 'tree' | '3d')}>
+              <ToggleGroupItem value="tree" className="h-7 px-2.5 text-xs">Tree</ToggleGroupItem>
+              <ToggleGroupItem value="3d" className="h-7 px-2.5 text-xs">3D</ToggleGroupItem>
+            </ToggleGroup>
           </div>
-          {mode === 'tree' ? <CallTree nodes={nodes} edges={edges} /> : <ForceGraph3D nodes={nodes} edges={edges} className="mini-graph" />}
-        </>
+          {mode === 'tree'
+            ? <CallTree nodes={nodes} edges={edges} />
+            : <ForceGraph3D nodes={nodes} edges={edges} className="h-64 rounded-md border bg-background/50" />}
+        </div>
       )}
       {impact.map((r) => (
-        <div key={r.name} className="kv col">
-          <span>Impact of <b className="mono">{r.name}</b></span>
-          <p className="impact-sum">
-            <b>{r.total}{r.truncated ? '+' : ''}</b> symbols across <b>{r.files.length}</b> files
-            <span className="muted"> · up to {r.depth} hops</span>
+        <div key={r.name}>
+          <p className="text-[0.8rem]">
+            Changing <span className="font-mono">{r.name}</span> can affect <strong>{r.total}{r.truncated ? '+' : ''}</strong> symbols in{' '}
+            <strong>{r.files.length}</strong> files, up to {r.depth} steps away.
           </p>
-          <Chips items={r.files.slice(0, 6).map((f) => `${f.filepath} · ${f.count}`)} />
+          <ul className="mt-1.5 space-y-0.5">
+            {r.files.slice(0, 6).map((f) => (
+              <li key={f.filepath} className="flex justify-between gap-3 font-mono text-[0.72rem] text-muted-foreground">
+                <span className="truncate">{f.filepath}</span><span className="tabular-nums">{f.count}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       ))}
       {expanded.length > 0 && (
-        <div className="kv col">
-          <span>Code pulled in via the graph</span>
-          <ol className="ranked">
-            {expanded.map((r, i) => (
-              <li key={`${r.filepath}:${r.symbol}:${r.start_line}`} style={{ animationDelay: `${i * 70}ms` }}>
-                <span className="rank">+</span>
-                <div className="ranked-body">
-                  <div className="ranked-top"><span className="ranked-sym">{r.symbol}</span></div>
-                  <div className="ranked-loc mono">{r.filepath}:{r.start_line}</div>
-                  <div className="score-meta">{r.reason}</div>
-                </div>
-              </li>
+        <div>
+          <p className="text-[0.8rem] font-medium">Code added from the graph</p>
+          <ol className="mt-1 divide-y divide-rule-soft">
+            {expanded.map((r) => (
+              <Hit key={`${r.filepath}:${r.symbol}:${r.start_line}`} rank="+" symbol={r.symbol} location={`${r.filepath}:${r.start_line}`}>
+                <p className="mt-0.5 text-[0.7rem] text-muted-foreground">{r.reason}</p>
+              </Hit>
             ))}
           </ol>
         </div>
@@ -338,26 +348,20 @@ function GraphPanel({ data }: { data: Record<string, any> }) { // eslint-disable
   )
 }
 
-function FetchMorePanel({ data }: { data: Record<string, any> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+function FetchMorePanel({ data }: { data: Data }) {
   const items: { item: string; found: { symbol: string; filepath: string; start_line: number }[] }[] = data.items ?? []
   return (
-    <div className="step-panel">
+    <div className="space-y-3">
       {items.map(({ item, found }) => (
-        <div key={item} className="kv col">
-          <span>Asked for <b className="mono">{item}</b></span>
+        <div key={item}>
+          <p className="text-[0.8rem]">Asked for <span className="font-mono">{item}</span></p>
           {found.length ? (
-            <ol className="ranked">
-              {found.map((f) => (
-                <li key={`${f.filepath}:${f.symbol}`}>
-                  <span className="rank">+</span>
-                  <div className="ranked-body">
-                    <div className="ranked-top"><span className="ranked-sym">{f.symbol}</span></div>
-                    <div className="ranked-loc mono">{f.filepath}:{f.start_line}</div>
-                  </div>
-                </li>
-              ))}
+            <ol className="divide-y divide-rule-soft">
+              {found.map((f) => <Hit key={`${f.filepath}:${f.symbol}`} rank="+" symbol={f.symbol} location={`${f.filepath}:${f.start_line}`} />)}
             </ol>
-          ) : <span className="muted small">Nothing new found (already in the context, or not in the index).</span>}
+          ) : (
+            <p className="text-[0.76rem] text-muted-foreground">Nothing new: it was already in the context, or isn't in the index.</p>
+          )}
         </div>
       ))}
     </div>
@@ -367,7 +371,14 @@ function FetchMorePanel({ data }: { data: Record<string, any> }) { // eslint-dis
 function StepBody({ node, event, msg }: { node: UiStep; event?: StepEvent; msg: Message }) {
   if (node === 'generate') {
     if (msg.pending || !msg.finishedAt || !msg.startedAt) return null
-    return <div className="step-panel"><span className="muted small">Answered in {((msg.finishedAt - msg.startedAt) / 1000).toFixed(1)}s</span></div>
+    const cites = msg.citations ?? []
+    const ok = cites.filter((c) => c.status === 'verified' || c.status === 'graph').length
+    return (
+      <p className="text-[0.8rem] text-muted-foreground">
+        Answered in {((msg.finishedAt - msg.startedAt) / 1000).toFixed(1)} s.{' '}
+        {cites.length ? `${ok} of ${cites.length} citations backed by the context.` : 'No citations to check.'}
+      </p>
+    )
   }
   if (!event) return null
   if (node === 'query_planner') return <PlanPanel data={event.data} />
@@ -380,15 +391,33 @@ function StepBody({ node, event, msg }: { node: UiStep; event?: StepEvent; msg: 
   return null
 }
 
+function StepMarker({ state, n }: { state: StepState; n: number }) {
+  return (
+    <span
+      className={cn(
+        'relative z-10 grid size-6 shrink-0 place-items-center rounded-full border text-[0.72rem] font-semibold tabular-nums',
+        state === 'done' && 'border-graphite bg-graphite text-sheet',
+        state === 'active' && 'border-graphite/40 bg-highlight text-highlight-ink',
+        state === 'failed' && 'border-check bg-check text-white',
+        state === 'pending' && 'bg-sheet text-muted-foreground',
+      )}
+    >
+      {state === 'done' ? <Check className="size-3.5" /> : state === 'failed' ? <X className="size-3.5" /> : n}
+    </span>
+  )
+}
+
 export default function PipelineInspector({ msg, question }: { msg: Message | null; question?: string }) {
-  const [collapsed, setCollapsed] = useState<Set<UiStep>>(new Set())
-  useEffect(() => setCollapsed(new Set()), [msg?.id])
+  const [closed, setClosed] = useState<Set<UiStep>>(new Set())
+  useEffect(() => setClosed(new Set()), [msg?.id]) // eslint-disable-line react-hooks/set-state-in-effect
 
   if (!msg) {
     return (
-      <div className="inspector-empty">
-        <MiniCity small />
-        <p className="muted">Ask a question to watch the pipeline run step by step.</p>
+      <div className="grid h-full place-items-center px-6 py-16 text-center">
+        <div>
+          <MiniCity className="mx-auto h-24 w-32" />
+          <p className="mt-4 max-w-[30ch] text-sm text-muted-foreground">Ask a question and each step it goes through appears here as it runs.</p>
+        </div>
       </div>
     )
   }
@@ -396,40 +425,55 @@ export default function PipelineInspector({ msg, question }: { msg: Message | nu
   const states = stepStates(msg)
   const events = new Map((msg.trace ?? []).map((e) => [e.node, e]))
   const errors = (msg.trace ?? []).at(-1)?.errors ?? []
-  const doneCount = steps.filter((s) => states[s.node] === 'done').length
 
   return (
-    <div className="inspector">
-      {question && <div className="inspector-q">“{question}”</div>}
-      <div className="inspector-progress"><span style={{ width: `${(doneCount / steps.length) * 100}%` }} /></div>
-      <ol className="pipe">
+    <div className="p-4">
+      {question && <p className="mb-4 border-l-2 border-rule pl-3 text-sm leading-snug text-muted-foreground">{question}</p>}
+      <ol className="relative">
+        {/* The rail joining the steps. */}
+        <span aria-hidden className="absolute bottom-3 left-3 top-3 w-px bg-rule" />
         {steps.map((s, i) => {
           const st = states[s.node]
-          const open = st === 'done' && !collapsed.has(s.node)
+          const open = st === 'done' && !closed.has(s.node)
           return (
-            <li key={s.node} className={`pipe-step ${st}`}>
-              <div className="pipe-rail" aria-hidden><span className="pipe-node">{st === 'done' ? '✓' : st === 'failed' ? '!' : i + 1}</span></div>
-              <div className="pipe-content">
+            <li key={s.node} className="relative flex gap-3 pb-4 last:pb-0">
+              <StepMarker state={st} n={i + 1} />
+              <div className="min-w-0 flex-1 pt-0.5">
                 <button
-                  className="pipe-head"
+                  className="flex w-full items-center gap-2 rounded-sm text-left disabled:cursor-default"
                   disabled={st !== 'done'}
-                  onClick={() => setCollapsed((c) => { const n = new Set(c); if (n.has(s.node)) n.delete(s.node); else n.add(s.node); return n })}
+                  aria-expanded={st === 'done' ? open : undefined}
+                  onClick={() => setClosed((c) => { const n = new Set(c); if (n.has(s.node)) n.delete(s.node); else n.add(s.node); return n })}
                 >
-                  <span className="pipe-label">{s.label}</span>
-                  <span className="pipe-state">{st === 'active' ? 'running' : st}</span>
+                  <span className={cn('text-sm font-semibold', st === 'pending' && 'text-muted-foreground')}>{s.label}</span>
+                  {st === 'active' && <span className="text-xs text-muted-foreground">running</span>}
+                  {st === 'done' && <ChevronDown className={cn('ml-auto size-3.5 text-muted-foreground transition-transform', open && 'rotate-180')} />}
                 </button>
-                <p className="pipe-sub">{s.sub}</p>
-                {st === 'active' && <div className="shimmer" />}
-                {open && <StepBody node={s.node} event={events.get(s.node as StepNode)} msg={msg} />}
+                <p className="mt-0.5 text-[0.76rem] leading-snug text-muted-foreground">{s.sub}</p>
+                <AnimatePresence initial={false}>
+                  {open && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-2.5 rounded-lg border bg-background/50 p-3">
+                        <StepBody node={s.node} event={events.get(s.node as StepNode)} msg={msg} />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </li>
           )
         })}
       </ol>
       {errors.length > 0 && (
-        <details className="pipe-errors">
-          <summary>{errors.length} retrieval note{errors.length > 1 ? 's' : ''}</summary>
-          <ul>{errors.map((e) => <li key={e} className="mono">{e}</li>)}</ul>
+        <details className="mt-4 rounded-lg border border-check/30 p-3 text-[0.78rem]">
+          <summary className="cursor-pointer text-check">{errors.length} {errors.length === 1 ? 'step' : 'steps'} reported a problem</summary>
+          <ul className="mt-2 space-y-1">{errors.map((e) => <li key={e} className="break-words font-mono text-[0.72rem] text-muted-foreground">{e}</li>)}</ul>
         </details>
       )}
     </div>

@@ -1,0 +1,266 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/big-shoulders-display';
+@import '@fontsource-variable/public-sans';
+@import '@fontsource-variable/jetbrains-mono';
+
+/*
+ * The repository as an architectural massing model on a drafting table.
+ * Light: drafting film and graphite. Dark: a cyanotype (blueprint) of the same drawing.
+ *
+ * Colour carries meaning and nothing else:
+ *   thread     a link in the graph (selection, call paths)
+ *   highlight  the exact line (cited lines, the step running now)
+ *   check      something to check (unverified citations, errors, deleting)
+ *   verified   checked against the code the model saw
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --film: #e6e9e4;
+  --sheet: #f6f7f3;
+  --sheet-2: #eef0eb;
+  --graphite: #1d2128;
+  --pencil: #575f6b;
+  --rule: #c6ccc4;
+  --rule-soft: #d8ddd6;
+  --thread: #1233c4;
+  --thread-soft: rgb(18 51 196 / 0.1);
+  --highlight: #ffe15c;
+  --highlight-ink: #1d2128;
+  --check: #b8322a;
+  --verified: #2f6b42;
+
+  /* model materials: white card, grey board, basswood */
+  --kind-function: #fbfbf8;
+  --kind-method: #cfd5cf;
+  --kind-class: #c8b28c;
+  --model-ground: #dfe3dd;
+  --model-plot: #eceee9;
+  --model-shadow: #9aa39a;
+
+  /* shadcn/ui names, mapped onto the drawing */
+  --background: var(--film);
+  --foreground: var(--graphite);
+  --card: var(--sheet);
+  --card-foreground: var(--graphite);
+  --popover: var(--sheet);
+  --popover-foreground: var(--graphite);
+  --primary: var(--graphite);
+  --primary-foreground: var(--sheet);
+  --secondary: var(--sheet-2);
+  --secondary-foreground: var(--graphite);
+  --muted: var(--sheet-2);
+  --muted-foreground: var(--pencil);
+  --accent: #e3e7e1;
+  --accent-foreground: var(--graphite);
+  --destructive: var(--check);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--thread);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --film: #0e2350;
+  --sheet: #132c62;
+  --sheet-2: #183470;
+  --graphite: #eef2ff;
+  --pencil: #a9b8dc;
+  --rule: #2f4b8c;
+  --rule-soft: #22407e;
+  --thread: #ffe15c;
+  --thread-soft: rgb(255 225 92 / 0.14);
+  --highlight: #ffe15c;
+  --highlight-ink: #0e2350;
+  --check: #ff8f80;
+  --verified: #8ad6a0;
+
+  --kind-function: #f4f7ff;
+  --kind-method: #bccbf3;
+  --kind-class: #8ea7ea;
+  --model-ground: #10295c;
+  --model-plot: #17336f;
+  --model-shadow: #081838;
+
+  --accent: #1c3a7a;
+  --primary-foreground: #0e2350;
+}
+
+@theme inline {
+  --font-display: 'Big Shoulders Display Variable', 'Arial Narrow', sans-serif;
+  --font-sans: 'Public Sans Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --color-film: var(--film);
+  --color-sheet: var(--sheet);
+  --color-sheet-2: var(--sheet-2);
+  --color-graphite: var(--graphite);
+  --color-pencil: var(--pencil);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+  --color-thread: var(--thread);
+  --color-thread-soft: var(--thread-soft);
+  --color-highlight: var(--highlight);
+  --color-highlight-ink: var(--highlight-ink);
+  --color-check: var(--check);
+  --color-verified: var(--verified);
+  --color-kind-function: var(--kind-function);
+  --color-kind-method: var(--kind-method);
+  --color-kind-class: var(--kind-class);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Type scale (modular, ~1.25 at text sizes, wider at display sizes) */
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1.1rem;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.35rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.6rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/60;
+  }
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-base antialiased;
+    font-feature-settings: 'ss01';
+  }
+  ::selection {
+    background: var(--highlight);
+    color: var(--highlight-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--thread);
+    outline-offset: 2px;
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  code, kbd, pre {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Drafting film: a faint 8mm grid, only behind full-bleed drawings. */
+@utility drafting-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--rule) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--rule) 28%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@utility display {
+  font-family: var(--font-display);
+  font-weight: 760;
+  letter-spacing: -0.01em;
+  line-height: 0.92;
+}
+
+/* Answers: readable prose with code and citations inline. */
+@layer components {
+  .prose-answer {
+    @apply text-[0.98rem] leading-[1.7] text-foreground;
+    max-width: 68ch;
+  }
+  .prose-answer > :first-child { margin-top: 0; }
+  .prose-answer > :last-child { margin-bottom: 0; }
+  .prose-answer p { margin: 0.6em 0; }
+  .prose-answer ul, .prose-answer ol { margin: 0.6em 0; padding-left: 1.3em; }
+  .prose-answer ul { list-style: disc; }
+  .prose-answer ol { list-style: decimal; }
+  .prose-answer li { margin: 0.3em 0; }
+  .prose-answer li::marker { color: var(--pencil); }
+  .prose-answer strong { font-weight: 650; }
+  .prose-answer h1, .prose-answer h2, .prose-answer h3 { font-weight: 650; margin: 1.1em 0 0.4em; font-size: 1.02em; }
+  .prose-answer :not(pre) > code {
+    @apply rounded-sm px-1 py-px text-[0.84em];
+    background: var(--sheet-2);
+    border: 1px solid var(--rule-soft);
+  }
+  .prose-answer pre {
+    @apply my-3 overflow-x-auto rounded-md border p-3 text-[0.82rem] leading-relaxed;
+    background: var(--sheet-2);
+  }
+  .prose-answer table { @apply my-3 border-collapse text-sm; }
+  .prose-answer th, .prose-answer td { @apply border px-2 py-1 text-left; }
+  .prose-answer a { color: var(--thread); text-decoration: underline; text-underline-offset: 2px; }
+}
+
+/* Shiki (css-variables theme): token colours follow the drawing in both themes. */
+:root {
+  --shiki-foreground: var(--graphite);
+  --shiki-background: transparent;
+  --shiki-token-constant: #8a4b12;
+  --shiki-token-string: #2f6b42;
+  --shiki-token-comment: #7b8390;
+  --shiki-token-keyword: #1233c4;
+  --shiki-token-parameter: #6a4a9c;
+  --shiki-token-function: #8a2f5a;
+  --shiki-token-string-expression: #2f6b42;
+  --shiki-token-punctuation: #575f6b;
+  --shiki-token-link: #1233c4;
+}
+.dark {
+  --shiki-token-constant: #ffc78a;
+  --shiki-token-string: #9fe0b0;
+  --shiki-token-comment: #8193c4;
+  --shiki-token-keyword: #ffe15c;
+  --shiki-token-parameter: #d6c2ff;
+  --shiki-token-function: #ffb3d1;
+  --shiki-token-string-expression: #9fe0b0;
+  --shiki-token-punctuation: #a9b8dc;
+  --shiki-token-link: #ffe15c;
+}
+
+/* Indeterminate progress: a bar sliding across its track. */
+@keyframes slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

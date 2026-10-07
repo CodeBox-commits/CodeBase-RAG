@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
-import { CITY, EDGE_COLORS, KIND_COLORS } from '../palette'
+import { cn } from '@/lib/utils'
+import { useModelPalette, type ModelPalette } from '../palette'
 
 /**
- * A repository as a neon city. Each file is a plot, each function/class/method a glass tower
- * whose height follows its line count, with edges and windows lit in its kind's colour.
- * Call edges are arcs between rooftops. Selecting a tower lights it and its calls in violet,
- * raises a beam from its roof and dims the rest of the city.
+ * A repository as an architectural massing model, seen in axonometric.
+ *
+ * The base board is the repository, each raised plot a file, each block a function (white
+ * card), method (grey board) or class (basswood), as tall as its code is long. Calls are
+ * threads strung between rooftops. Selecting a block pins it, draws its calls taut in the
+ * thread colour and lets the rest of the model fall back to plain board.
  */
 
 export interface CityNode {
@@ -30,18 +29,22 @@ interface Props {
   onSelect?: (id: string | null) => void
   /** Drag to orbit and wheel to zoom. Off for the hero, where it would trap page scroll. */
   controls?: boolean
-  /** Cycles a lit "query" through the city when nothing is selected. */
+  /** Passes the pin from one well-connected block to the next while nothing is selected. */
   tour?: boolean
-  /** Shifts the city sideways in frame (fraction of the width), to leave room for overlaid copy. */
+  /** Shifts the model sideways in frame (fraction of the width), to leave room for copy. */
   offsetX?: number
+  /** Multiplies the framed size: >1 shows more margin around the model. */
+  framing?: number
   className?: string
 }
 
 interface Tower { node: CityNode; x: number; z: number; h: number; w: number }
 
 const dirname = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
+const PLINTH = 0.5
+const PLOT = 0.07
 
-function layoutCity(nodes: CityNode[]) {
+export function layoutCity(nodes: CityNode[]) {
   const byFile = new Map<string, CityNode[]>()
   nodes.forEach((n) => {
     const f = n.filepath ?? '(unknown)'
@@ -55,27 +58,25 @@ function layoutCity(nodes: CityNode[]) {
     return { file: f, items, n, size: n + 0.5 }
   })
 
-  // Shelf-pack the file plots into a roughly square city; a new directory leaves a wider street.
+  // Shelf-pack the file plots into a roughly square board; a new directory leaves a wider street.
   const area = blocks.reduce((s, b) => s + (b.size + 1) ** 2, 0)
   const maxW = Math.max(Math.sqrt(area) * 1.15, 6)
   const towers: Tower[] = []
-  const plots: { x: number; z: number; size: number }[] = []
+  const plots: { x: number; z: number; size: number; file: string }[] = []
   let x = 0, z = 0, rowH = 0, prevDir: string | null = null
   blocks.forEach((b) => {
     const dir = dirname(b.file)
     if (prevDir !== null && dir !== prevDir) x += 1.2
     if (x + b.size > maxW && x > 0) { x = 0; z += rowH + 1; rowH = 0 }
-    plots.push({ x: x + b.size / 2, z: z + b.size / 2, size: b.size })
+    plots.push({ x: x + b.size / 2, z: z + b.size / 2, size: b.size, file: b.file })
     b.items.forEach((node, i) => {
-      const cx = x + 0.75 + (i % b.n)
-      const cz = z + 0.75 + Math.floor(i / b.n)
       const lines = Math.max(node.lines ?? 6, 1)
       towers.push({
         node,
-        x: cx,
-        z: cz,
-        h: Math.min(0.35 + Math.sqrt(lines) * 0.42, 9),
-        w: node.kind === 'class' ? 0.82 : node.kind === 'method' ? 0.58 : 0.66,
+        x: x + 0.75 + (i % b.n),
+        z: z + 0.75 + Math.floor(i / b.n),
+        h: Math.min(0.3 + Math.sqrt(lines) * 0.4, 9),
+        w: node.kind === 'class' ? 0.8 : node.kind === 'method' ? 0.56 : 0.64,
       })
     })
     x += b.size + 1
@@ -86,202 +87,198 @@ function layoutCity(nodes: CityNode[]) {
   const depth = Math.max(...plots.map((p) => p.z + p.size / 2), 1)
   towers.forEach((t) => { t.x -= width / 2; t.z -= depth / 2 })
   plots.forEach((p) => { p.x -= width / 2; p.z -= depth / 2 })
-  return { towers, plots, radius: Math.hypot(width, depth) / 2 }
+  return { towers, plots, width, depth, radius: Math.hypot(width, depth) / 2 }
 }
 
-/** A point on the arc from rooftop a to rooftop b; arcs rise with the distance they span. */
+/** A point on the thread from rooftop a to rooftop b; longer threads hang higher. */
 function arcPoint(a: Tower, b: Tower, t: number, out: THREE.Vector3) {
   const span = Math.hypot(b.x - a.x, b.z - a.z)
-  const lift = 1.2 + span * 0.38
-  const y0 = a.h, y1 = b.h
-  const top = Math.max(y0, y1) + lift
+  const y0 = PLOT + a.h, y1 = PLOT + b.h
+  const top = Math.max(y0, y1) + 0.8 + span * 0.3
   const u = 1 - t
   out.set(a.x + (b.x - a.x) * t, u * u * y0 + 2 * u * t * top + t * t * y1, a.z + (b.z - a.z) * t)
   return out
 }
 
 const ARC_SEGMENTS = 16
+const MAX_LIT = 80
 
-// Glass towers: a dark body with neon edges, a lit roof and a grid of windows, some on.
-// Edge and window sizes are in world units, so thin and tall towers read the same.
-const TOWER_VERT = /* glsl */ `
-  varying vec3 vLocal;
-  varying vec3 vScale;
-  varying vec3 vNormal;
-  varying vec3 vColor;
-  varying float vSeed;
-  varying float vDepth;
-  void main() {
-    vLocal = position;
-    vScale = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
-    vNormal = normal;
-    vColor = instanceColor;
-    vSeed = float(gl_InstanceID);
-    vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-    vDepth = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }`
-
-const TOWER_FRAG = /* glsl */ `
-  uniform vec3 uBody;
-  uniform vec3 uFog;
-  uniform float uNear;
-  uniform float uFar;
-  uniform float uTime;
-  varying vec3 vLocal;
-  varying vec3 vScale;
-  varying vec3 vNormal;
-  varying vec3 vColor;
-  varying float vSeed;
-  varying float vDepth;
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  void main() {
-    vec3 w = vLocal * vScale;
-    vec3 n = abs(vNormal);
-    vec2 uv; vec2 size;
-    if (n.y > 0.5) { uv = w.xz + vScale.xz * 0.5; size = vScale.xz; }
-    else if (n.x > 0.5) { uv = vec2(w.z + vScale.z * 0.5, w.y); size = vScale.zy; }
-    else { uv = vec2(w.x + vScale.x * 0.5, w.y); size = vScale.xy; }
-    vec2 d = min(uv, size - uv);
-    float edge = 1.0 - smoothstep(0.012, 0.04, min(d.x, d.y));
-
-    vec3 col = uBody;
-    if (n.y < 0.5) {
-      vec2 cellSize = vec2(0.15, 0.26);
-      vec2 cell = floor(uv / cellSize);
-      vec2 f = fract(uv / cellSize);
-      float win = step(0.28, f.x) * step(f.x, 0.72) * step(0.32, f.y) * step(f.y, 0.68);
-      float on = step(0.58, hash(cell + vSeed * 3.17));
-      float flicker = 0.7 + 0.3 * sin(uTime * 1.3 + hash(cell + vSeed) * 40.0);
-      float margin = step(0.07, d.x) * step(0.1, d.y);
-      col += vColor * win * on * flicker * margin * 0.5;
-      // A soft glow pooling at the foot of every tower.
-      col += vColor * 0.1 * (1.0 - smoothstep(0.0, 1.0, uv.y));
-    } else {
-      col += vColor * 0.32;
-    }
-    col = mix(col, vColor * 1.3, edge);
-    // Far towers glow less, so a large city reads as a skyline rather than a haze.
-    col = mix(uBody, col, 1.0 - 0.55 * smoothstep(uNear * 0.6, uFar, vDepth));
-    float fog = smoothstep(uNear, uFar, vDepth);
-    gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
-  }`
+/** A soft round shadow for under the base board, so the model sits on the page. */
+function contactShadowTexture(color: number) {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const c = new THREE.Color(color)
+  const rgb = `${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}`
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  g.addColorStop(0, `rgba(${rgb}, 0.55)`)
+  g.addColorStop(0.55, `rgba(${rgb}, 0.22)`)
+  g.addColorStop(1, `rgba(${rgb}, 0)`)
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
 
 export default function CodeCity({
-  nodes, edges, selected = null, highlight = null, onSelect, controls = true, tour = false, offsetX = 0, className,
+  nodes, edges, selected = null, highlight = null, onSelect, controls = true, tour = false, offsetX = 0, framing = 1, className,
 }: Props) {
+  const palette = useModelPalette()
   const mountRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLDivElement>(null)
-  const apiRef = useRef<{ focus: (sel: string | null, hl: Set<string> | null) => void } | null>(null)
+  const apiRef = useRef<{ focus: (sel: string | null, hl: Set<string> | null) => void; reframe: () => void } | null>(null)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
   const [hover, setHover] = useState<CityNode | null>(null)
-  // The tour must stand down while the user has something selected.
   const selectedRef = useRef(selected)
   selectedRef.current = selected
+  const offsetRef = useRef(offsetX)
+  offsetRef.current = offsetX
+  // The camera survives a theme switch: the scene is rebuilt, the view isn't reset.
+  const viewRef = useRef<{ yaw: number; pitch: number; zoom: number | null }>({ yaw: 0.78, pitch: 0.62, zoom: null })
 
   useEffect(() => {
     const mount = mountRef.current
     if (!mount || nodes.length === 0) return
+    const pal: ModelPalette = palette
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true })
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setClearColor(0x000000, 0)
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.outputColorSpace = THREE.SRGBColorSpace
     mount.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(CITY.ground)
-    const fog = new THREE.Fog(CITY.ground, 40, 140)
-    scene.fog = fog
-    const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 600)
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 500)
     const disposables: { dispose(): void }[] = []
     const keep = <T extends { dispose(): void }>(x: T) => (disposables.push(x), x)
 
-    // Bloom turns the neon edges, windows and arcs into light.
-    const composer = new EffectComposer(renderer)
-    composer.addPass(new RenderPass(scene, camera))
-    const { towers, plots, radius } = layoutCity(nodes)
-    // Big cities have far more lit pixels, so they get less bloom.
-    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.9 * THREE.MathUtils.clamp(16 / radius, 0.45, 1), 0.5, 0.3)
-    composer.addPass(bloom)
-    composer.addPass(new OutputPass())
-
+    const { towers, plots, width, depth, radius } = layoutCity(nodes)
     const indexOf = new Map(towers.map((t, i) => [t.node.id, i]))
     const links = edges
       .map((e) => ({ a: indexOf.get(e.source), b: indexOf.get(e.target), type: e.type }))
       .filter((l): l is { a: number; b: number; type: string } => l.a !== undefined && l.b !== undefined && l.a !== l.b)
-    // Membership edges are implied by the plots; only calls and inheritance are drawn as arcs.
+    // Membership is implied by the plots; only calls and inheritance are strung as threads.
     const arcs = links.filter((l) => l.type !== 'HAS_METHOD')
 
-    // --- ground: a neon street grid, and one outlined plot per file --------------------
-    const grid = new THREE.GridHelper(Math.ceil(radius * 4), Math.ceil(radius * 4), CITY.gridMajor, CITY.grid)
-    grid.position.y = -0.02
-    keep(grid.geometry); keep(grid.material as THREE.Material)
-    scene.add(grid)
+    // --- light: one sun casting soft shadows, and sky light for the shaded faces -------
+    scene.add(new THREE.HemisphereLight(pal.dark ? 0xdfe7ff : 0xffffff, pal.dark ? 0x3a5aa8 : 0xb9c1b8, pal.dark ? 2.1 : 1.55))
+    const sun = new THREE.DirectionalLight(pal.dark ? 0xe6edff : 0xfffbf2, pal.dark ? 2.3 : 2.1)
+    sun.position.set(-radius * 0.9, radius * 1.6 + 10, radius * 0.6)
+    sun.castShadow = true
+    sun.shadow.mapSize.set(2048, 2048)
+    const sc = sun.shadow.camera
+    sc.left = sc.bottom = -radius * 1.4
+    sc.right = sc.top = radius * 1.4
+    sc.near = 0.5
+    sc.far = radius * 6 + 60
+    sun.shadow.bias = -0.0004
+    sun.shadow.normalBias = 0.02
+    sun.shadow.radius = 4
+    scene.add(sun)
 
-    const slabGeo = keep(new THREE.BoxGeometry(1, 0.08, 1))
-    const slabMat = keep(new THREE.MeshBasicMaterial({ color: CITY.plot }))
-    const slabs = new THREE.InstancedMesh(slabGeo, slabMat, plots.length)
+    // --- base board, its contact shadow on the page, and one raised plot per file ------
+    const boardW = width + 2, boardD = depth + 2
+    const board = new THREE.Mesh(
+      keep(new THREE.BoxGeometry(boardW, PLINTH, boardD)),
+      keep(new THREE.MeshStandardMaterial({ color: pal.ground, roughness: 0.95 })),
+    )
+    board.position.y = -PLINTH / 2
+    board.receiveShadow = true
+    scene.add(board)
+
+    const shadowTex = keep(contactShadowTexture(pal.shadow))
+    const contact = new THREE.Mesh(
+      keep(new THREE.PlaneGeometry(boardW * 1.5, boardD * 1.5)),
+      keep(new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false })),
+    )
+    contact.rotation.x = -Math.PI / 2
+    contact.position.y = -PLINTH - 0.01
+    scene.add(contact)
+
+    const plotMat = keep(new THREE.MeshStandardMaterial({ color: pal.plot, roughness: 0.9 }))
+    const plotMesh = new THREE.InstancedMesh(keep(new THREE.BoxGeometry(1, PLOT, 1)), plotMat, plots.length)
     const m = new THREE.Matrix4()
-    plots.forEach((p, i) => slabs.setMatrixAt(i, m.compose(new THREE.Vector3(p.x, 0.04, p.z), new THREE.Quaternion(), new THREE.Vector3(p.size, 1, p.size))))
-    scene.add(slabs)
+    const q = new THREE.Quaternion()
+    plots.forEach((p, i) => plotMesh.setMatrixAt(i, m.compose(new THREE.Vector3(p.x, PLOT / 2, p.z), q, new THREE.Vector3(p.size, 1, p.size))))
+    plotMesh.receiveShadow = true
+    scene.add(plotMesh)
 
-    const outline = new Float32Array(plots.length * 24)
-    plots.forEach((p, i) => {
-      const h = p.size / 2, y = 0.09
-      const c = [[-h, -h], [h, -h], [h, h], [-h, h]]
-      c.forEach(([ax, az], k) => {
-        const [bx, bz] = c[(k + 1) % 4]
-        outline.set([p.x + ax, y, p.z + az, p.x + bx, y, p.z + bz], i * 24 + k * 6)
-      })
-    })
-    const outlineGeo = keep(new THREE.BufferGeometry())
-    outlineGeo.setAttribute('position', new THREE.BufferAttribute(outline, 3))
-    const outlineMat = keep(new THREE.LineBasicMaterial({ color: CITY.plotEdge, transparent: true, opacity: 0.8 }))
-    scene.add(new THREE.LineSegments(outlineGeo, outlineMat))
-
-    // --- towers ----------------------------------------------------------------------
+    // --- blocks --------------------------------------------------------------------------
     const towerGeo = keep(new THREE.BoxGeometry(1, 1, 1))
     towerGeo.translate(0, 0.5, 0)
-    const towerMat = keep(new THREE.ShaderMaterial({
-      vertexShader: TOWER_VERT,
-      fragmentShader: TOWER_FRAG,
-      uniforms: {
-        uBody: { value: new THREE.Color(CITY.body) },
-        uFog: { value: new THREE.Color(CITY.ground) },
-        uNear: { value: 40 },
-        uFar: { value: 140 },
-        uTime: { value: 0 },
-      },
-    }))
+    const towerMat = keep(new THREE.MeshStandardMaterial({ roughness: pal.dark ? 0.7 : 0.88, metalness: 0 }))
     const city = new THREE.InstancedMesh(towerGeo, towerMat, towers.length)
-    const base = towers.map((t) => new THREE.Color(KIND_COLORS[t.node.kind] ?? CITY.unknown))
-    const rise = new Float32Array(towers.length) // 0..1 build-up on first appearance
+    city.castShadow = true
+    city.receiveShadow = true
+    const base = towers.map((t) => new THREE.Color(pal.kinds[t.node.kind] ?? pal.kinds.method))
+    const rise = new Float32Array(towers.length)
     const setTower = (i: number, grow: number) => {
       const t = towers[i]
-      m.compose(new THREE.Vector3(t.x, 0.08, t.z), new THREE.Quaternion(), new THREE.Vector3(t.w, Math.max(t.h * grow, 0.001), t.w))
+      m.compose(new THREE.Vector3(t.x, PLOT, t.z), q, new THREE.Vector3(t.w, Math.max(t.h * grow, 0.001), t.w))
       city.setMatrixAt(i, m)
     }
     towers.forEach((_, i) => { rise[i] = reduceMotion ? 1 : 0; setTower(i, rise[i]); city.setColorAt(i, base[i]) })
     scene.add(city)
 
-    // --- arcs: a faint layer for every call, and lit tubes for the focused tower ---------
+    // Cut edges: a hairline in light, the white linework of a blueprint in dark.
+    const edgePos: number[] = []
+    const unit = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+    const edgeRanges: [number, number][] = []
+    towers.forEach((t) => {
+      const start = edgePos.length / 3
+      const hw = t.w
+      const pts = unit.map(([ux, uz]) => [t.x + ux * hw, t.z + uz * hw])
+      pts.forEach(([ax, az], k) => {
+        const [bx, bz] = pts[(k + 1) % 4]
+        edgePos.push(ax, PLOT + t.h, az, bx, PLOT + t.h, bz) // roof
+        edgePos.push(ax, PLOT, az, ax, PLOT + t.h, az) // vertical corner
+      })
+      edgeRanges.push([start, edgePos.length / 3 - start])
+    })
+    const edgeGeo = keep(new THREE.BufferGeometry())
+    const edgeArr = new Float32Array(edgePos)
+    edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgeArr, 3))
+    const edgeMat = keep(new THREE.LineBasicMaterial({
+      color: pal.dark ? 0xffffff : pal.graphite, transparent: true, opacity: pal.dark ? 0.42 : 0.14,
+    }))
+    const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat)
+    // Edges grow with their block on first paint.
+    const edgeFull = edgeArr.slice()
+    const growEdges = (i: number, grow: number) => {
+      const [start, count] = edgeRanges[i]
+      for (let k = start; k < start + count; k++) {
+        const y = edgeFull[k * 3 + 1]
+        edgeArr[k * 3 + 1] = PLOT + (y - PLOT) * grow
+      }
+    }
+    if (!reduceMotion) towers.forEach((_, i) => growEdges(i, 0))
+    scene.add(edgeLines)
+
+    // --- threads: a faint layer for every call, taut tubes for the selected block --------
     const faintPos = new Float32Array(arcs.length * ARC_SEGMENTS * 6)
     const faintCol = new Float32Array(arcs.length * ARC_SEGMENTS * 6)
     const faintGeo = keep(new THREE.BufferGeometry())
     faintGeo.setAttribute('position', new THREE.BufferAttribute(faintPos, 3))
     faintGeo.setAttribute('color', new THREE.BufferAttribute(faintCol, 3))
-    const faintMat = keep(new THREE.LineBasicMaterial({
-      vertexColors: true, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending,
-    }))
-    scene.add(new THREE.LineSegments(faintGeo, faintMat))
+    // Fewer, clearer threads in big repositories: the faint layer thins out as calls multiply.
+    const faintBase = THREE.MathUtils.clamp(0.24 * Math.sqrt(120 / Math.max(arcs.length, 1)), 0.05, 0.24)
+    const faintMat = keep(new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: faintBase, depthWrite: false }))
+    const faint = new THREE.LineSegments(faintGeo, faintMat)
+    scene.add(faint)
 
     const p0 = new THREE.Vector3(), p1 = new THREE.Vector3()
     const col = new THREE.Color()
+    const groundCol = new THREE.Color(pal.ground)
     const paintFaint = (only: Set<number> | null) => {
       arcs.forEach((l, k) => {
-        col.setHex(EDGE_COLORS[l.type] ?? CITY.unknown)
-        if (only && !(only.has(l.a) && only.has(l.b))) col.multiplyScalar(0.12)
+        col.setHex(pal.edges[l.type] ?? pal.thread)
+        if (only && !(only.has(l.a) && only.has(l.b))) col.lerp(groundCol, 0.85)
         for (let s = 0; s < ARC_SEGMENTS; s++) {
           const o = (k * ARC_SEGMENTS + s) * 6
           arcPoint(towers[l.a], towers[l.b], s / ARC_SEGMENTS, p0).toArray(faintPos, o)
@@ -295,59 +292,51 @@ export default function CodeCity({
     }
     paintFaint(null)
 
-    // Lit arcs are real tubes (WebGL lines are always 1px), rebuilt whenever the focus moves.
-    // Colours above 1.0 push them past the bloom threshold.
-    const MAX_LIT = 80
     const litGroup = new THREE.Group()
     scene.add(litGroup)
     const litMats = {
-      CALLS: keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(CITY.lit).multiplyScalar(1.8) })),
-      INHERITS: keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(EDGE_COLORS.INHERITS).multiplyScalar(1.6) })),
+      CALLS: keep(new THREE.MeshBasicMaterial({ color: pal.thread })),
+      INHERITS: keep(new THREE.MeshBasicMaterial({ color: pal.edges.INHERITS })),
     }
     const clearLit = () => {
       litGroup.children.forEach((c) => (c as THREE.Mesh).geometry.dispose())
       litGroup.clear()
     }
-    const ctrl = new THREE.Vector3()
+    const threadRadius = Math.max(0.035, radius * 0.0022)
     const tubeFor = (a: Tower, b: Tower) => {
-      const span = Math.hypot(b.x - a.x, b.z - a.z)
-      ctrl.set((a.x + b.x) / 2, Math.max(a.h, b.h) + 1.2 + span * 0.38, (a.z + b.z) / 2)
-      const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(a.x, a.h, a.z), ctrl.clone(), new THREE.Vector3(b.x, b.h, b.z))
-      return new THREE.TubeGeometry(curve, 40, Math.max(0.06, radius * 0.003), 6, false)
+      const pts = Array.from({ length: 33 }, (_, s) => arcPoint(a, b, s / 32, new THREE.Vector3()))
+      return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, threadRadius, 6, false)
     }
 
-    // Pulses: one bead per lit arc, travelling caller → callee.
-    const beadGeo = keep(new THREE.SphereGeometry(0.18, 12, 10))
-    const beadMat = keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff).multiplyScalar(2.2) }))
-    const beads = new THREE.InstancedMesh(beadGeo, beadMat, MAX_LIT)
+    // Beads run caller → callee along each taut thread.
+    const beadMat = keep(new THREE.MeshBasicMaterial({ color: pal.thread }))
+    const beads = new THREE.InstancedMesh(keep(new THREE.SphereGeometry(threadRadius * 2.6, 12, 10)), beadMat, MAX_LIT)
     beads.count = 0
     scene.add(beads)
 
-    // The selected tower gets a beam of light from its roof and a scan ring on the ground.
-    const beamGeo = keep(new THREE.CylinderGeometry(0.05, 0.05, 1, 8, 1, true))
-    beamGeo.translate(0, 0.5, 0)
-    const beamMat = keep(new THREE.MeshBasicMaterial({
-      color: new THREE.Color(CITY.lit).multiplyScalar(1.4), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false,
-    }))
-    const beam = new THREE.Mesh(beamGeo, beamMat)
-    beam.visible = false
-    scene.add(beam)
-    const ringGeo = keep(new THREE.RingGeometry(0.92, 1, 64))
-    ringGeo.rotateX(-Math.PI / 2)
-    const ringMat = keep(new THREE.MeshBasicMaterial({
-      color: new THREE.Color(CITY.lit).multiplyScalar(1.5), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
-    }))
-    const ring = new THREE.Mesh(ringGeo, ringMat)
-    ring.position.y = 0.12
-    ring.visible = false
-    scene.add(ring)
+    // The selected block gets a model-maker's pin: a needle and a round head.
+    const pin = new THREE.Group()
+    const needleMat = keep(new THREE.MeshStandardMaterial({ color: pal.dark ? 0xe8eeff : 0x8b929c, metalness: 0.6, roughness: 0.35 }))
+    const needle = new THREE.Mesh(keep(new THREE.CylinderGeometry(0.025, 0.025, 1.8, 8)), needleMat)
+    needle.position.y = 0.9
+    const head = new THREE.Mesh(
+      keep(new THREE.SphereGeometry(0.26, 24, 16)),
+      keep(new THREE.MeshStandardMaterial({ color: pal.thread, roughness: 0.35 })),
+    )
+    head.position.y = 1.9
+    head.castShadow = true
+    needle.castShadow = true
+    pin.add(needle, head)
+    pin.visible = false
+    scene.add(pin)
 
-    // --- focus ---------------------------------------------------------------------
+    // --- focus -----------------------------------------------------------------------------
     let lit: { a: number; b: number; type: string }[] = []
     let litGrow = 1
     let focusIdx = -1
     let focusAt = 0
     const clock = new THREE.Clock()
+    const threadCol = new THREE.Color(pal.thread)
     const focus = (sel: string | null, hl: Set<string> | null) => {
       focusIdx = sel ? indexOf.get(sel) ?? -1 : -1
       focusAt = clock.elapsedTime
@@ -363,42 +352,34 @@ export default function CodeCity({
         })
       }
       const hlIdx = hl && hl.size ? new Set([...hl].map((id) => indexOf.get(id)).filter((i): i is number => i !== undefined)) : null
-      const keepSet = focusIdx >= 0 ? near : hlIdx
-      const dim = focusIdx >= 0 && tour ? 0.4 : 0.18
+      const keepSet = focusIdx >= 0 ? (hlIdx ? new Set([...near, ...hlIdx]) : near) : hlIdx
       towers.forEach((_, i) => {
         col.copy(base[i])
-        if (i === focusIdx) col.setHex(CITY.lit).multiplyScalar(1.5)
-        else if (keepSet && !keepSet.has(i)) col.multiplyScalar(dim)
+        if (i === focusIdx) col.copy(base[i]).lerp(threadCol, 0.55)
+        else if (hlIdx?.has(i) && focusIdx < 0) col.copy(base[i]).lerp(threadCol, 0.35)
+        else if (keepSet && !keepSet.has(i)) col.lerp(groundCol, 0.72)
         city.setColorAt(i, col)
       })
       city.instanceColor!.needsUpdate = true
       paintFaint(keepSet)
-      faintMat.opacity = focusIdx >= 0 ? 0.18 : 0.3
+      faintMat.opacity = focusIdx >= 0 ? faintBase * 0.5 : faintBase
       clearLit()
       lit.forEach((l) => {
         litGroup.add(new THREE.Mesh(tubeFor(towers[l.a], towers[l.b]), l.type === 'INHERITS' ? litMats.INHERITS : litMats.CALLS))
       })
       litGrow = reduceMotion ? 1 : 0
-      beam.visible = ring.visible = focusIdx >= 0
+      pin.visible = focusIdx >= 0
       if (focusIdx >= 0) {
         const tw = towers[focusIdx]
-        beam.position.set(tw.x, tw.h, tw.z)
-        ring.position.x = tw.x
-        ring.position.z = tw.z
+        pin.position.set(tw.x, PLOT + tw.h, tw.z)
       }
     }
-    apiRef.current = { focus }
 
-    // --- camera ------------------------------------------------------------------------
-    let yaw = 0.75, pitch = 0.72
-    // Distance that fits the whole city in the narrower of the two fields of view.
-    const fitDist = () => {
-      const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
-      const tanH = tanV * camera.aspect
-      return (radius * 1.08) / Math.min(tanV * 1.3, tanH) + 6
-    }
-    let dist = 60, targetDist = dist, userZoomed = false
-    const minD = Math.max(radius * 0.6, 8), maxD = radius * 8 + 60
+    // --- camera: axonometric orbit ------------------------------------------------------------
+    const view = viewRef.current
+    let { yaw, pitch } = view
+    let zoom = view.zoom ?? 1, targetZoom = zoom
+    const minZoom = 0.6, maxZoom = 6
     let dragging = false, moved = false, lastX = 0, lastY = 0, idleSince = performance.now()
     const el = renderer.domElement
     const raycaster = new THREE.Raycaster()
@@ -416,7 +397,7 @@ export default function CodeCity({
         const dx = e.clientX - lastX, dy = e.clientY - lastY
         if (Math.abs(dx) + Math.abs(dy) > 2) moved = true
         yaw -= dx * 0.006
-        pitch = Math.max(0.18, Math.min(1.45, pitch + dy * 0.005))
+        pitch = Math.max(0.2, Math.min(1.45, pitch + dy * 0.005))
         lastX = e.clientX; lastY = e.clientY
         return
       }
@@ -436,8 +417,7 @@ export default function CodeCity({
     }
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      userZoomed = true
-      targetDist = Math.max(minD, Math.min(maxD, targetDist * (1 + Math.sign(e.deltaY) * 0.1)))
+      targetZoom = Math.max(minZoom, Math.min(maxZoom, targetZoom * (1 - Math.sign(e.deltaY) * 0.1)))
     }
     if (controls) el.style.touchAction = 'none'
     el.addEventListener('pointermove', onMove)
@@ -446,70 +426,80 @@ export default function CodeCity({
     el.addEventListener('pointerup', onUp)
     if (controls) el.addEventListener('wheel', onWheel, { passive: false })
 
+    let frustum = 10
+    const boardDiagonal = Math.hypot(boardW, boardD)
+    const tallest = Math.max(...towers.map((t) => t.h), 1)
     const resize = () => {
       const { clientWidth: w, clientHeight: h } = mount
       renderer.setSize(w, h, false)
-      composer.setPixelRatio(renderer.getPixelRatio())
-      composer.setSize(w, h)
-      camera.aspect = w / Math.max(h, 1)
-      // Wide screens push the city aside for the copy; narrow ones keep it centred.
-      // Portrait screens lift it into the top half, above the copy.
-      const shift = camera.aspect > 1.2 ? offsetX : 0
-      const lift = offsetX && camera.aspect < 1 ? 0.2 : 0
-      if (shift || lift) camera.setViewOffset(w, h, -shift * w, lift * h, w, h)
+      const aspect = w / Math.max(h, 1)
+      // Fit the whole board in both dimensions: its diagonal across, and its depth plus
+      // the tallest blocks (foreshortened by the pitch) down.
+      const across = boardDiagonal * 1.04
+      const down = boardDiagonal * Math.sin(view.pitch) * 0.98 + tallest * Math.cos(view.pitch) + 2
+      frustum = Math.max(down, across / aspect) * framing
+      camera.left = (-frustum * aspect) / 2
+      camera.right = (frustum * aspect) / 2
+      camera.top = frustum / 2
+      camera.bottom = -frustum / 2
+      const shift = aspect > 1.2 ? offsetRef.current : 0
+      if (shift) camera.setViewOffset(w, h, -shift * w, 0, w, h)
       else camera.clearViewOffset()
       camera.updateProjectionMatrix()
-      if (!userZoomed) targetDist = dist = Math.min(maxD, fitDist())
     }
     const ro = new ResizeObserver(resize)
     ro.observe(mount)
     resize()
+    apiRef.current = { focus, reframe: resize }
 
     let visible = true
     const io = new IntersectionObserver(([entry]) => (visible = entry.isIntersecting))
     io.observe(mount)
 
-    // Tour: hand the light from one well-connected tower to the next.
     const tourable = tour ? towers.map((_, i) => i).filter((i) => arcs.filter((l) => l.a === i).length >= 2) : []
     let tourAt = 0, tourStep = 0
 
-    // --- loop ----------------------------------------------------------------------
+    // --- loop --------------------------------------------------------------------------------
     const bead = new THREE.Vector3()
+    const target = new THREE.Vector3(0, 1.2, 0)
     let frame = 0
     const render = () => {
       frame = requestAnimationFrame(render)
       if (!visible) return
       const dt = Math.min(clock.getDelta(), 0.05)
       const t = clock.elapsedTime
-      towerMat.uniforms.uTime.value = reduceMotion ? 0 : t
 
-      // Towers rise in a wave from the city centre on first paint.
+      // The one orchestrated moment: blocks rise from the centre of the board outwards.
       let growing = false
       towers.forEach((tw, i) => {
         if (rise[i] >= 1) return
-        const delay = Math.hypot(tw.x, tw.z) / (radius + 1) * 0.9
-        rise[i] = Math.min(1, Math.max(0, (t - delay) * 1.6))
-        setTower(i, 1 - (1 - rise[i]) ** 3)
+        const delay = (Math.hypot(tw.x, tw.z) / (radius + 1)) * 0.8
+        rise[i] = Math.min(1, Math.max(0, (t - delay) * 1.5))
+        const g = 1 - (1 - rise[i]) ** 3
+        setTower(i, g)
+        growEdges(i, g)
         growing = true
       })
-      if (growing) city.instanceMatrix.needsUpdate = true
+      if (growing) {
+        city.instanceMatrix.needsUpdate = true
+        edgeGeo.attributes.position.needsUpdate = true
+        city.computeBoundingSphere()
+      }
 
-      if (tourable.length && !selectedRef.current && !reduceMotion && t > 1.6 && t - tourAt > 3.4) {
+      if (tourable.length && !selectedRef.current && !reduceMotion && t > 1.8 && t - tourAt > 3.6) {
         tourAt = t
         focus(towers[tourable[(tourStep++ * 7) % tourable.length]].node.id, null)
       }
 
-      // Lit arcs draw themselves outward, then carry a bead each.
       if (lit.length) {
-        litGrow = Math.min(1, litGrow + dt * 1.8)
-        // Tube indices run along the curve, so a partial draw range grows the arc from its caller.
+        litGrow = Math.min(1, litGrow + dt * 2)
         litGroup.children.forEach((c) => {
           const g = (c as THREE.Mesh).geometry
           g.setDrawRange(0, Math.ceil((g.index!.count / 6) * litGrow) * 6)
         })
         beads.count = litGrow >= 1 && !reduceMotion ? lit.length : 0
         lit.forEach((l, k) => {
-          arcPoint(towers[l.a], towers[l.b], (t * 0.55 + k * 0.13) % 1, bead)
+          arcPoint(towers[l.a], towers[l.b], (t * 0.45 + k * 0.13) % 1, bead)
           beads.setMatrixAt(k, m.makeTranslation(bead.x, bead.y, bead.z))
         })
         beads.instanceMatrix.needsUpdate = true
@@ -517,30 +507,28 @@ export default function CodeCity({
         beads.count = 0
       }
 
-      if (focusIdx >= 0) {
-        // The beam shoots up once, then the ring keeps scanning outwards.
+      if (pin.visible) {
+        // The pin drops in once, then rests.
         const since = t - focusAt
-        beam.scale.set(1, reduceMotion ? 18 : Math.min(1, since * 2.5) * 18, 1)
-        const cycle = reduceMotion ? 0.5 : (since % 2) / 2
-        ring.scale.setScalar(0.6 + cycle * (2.5 + radius * 0.12))
-        ringMat.opacity = 0.9 * (1 - cycle)
+        const drop = reduceMotion ? 0 : Math.max(0, 1 - since * 3.5) ** 2 * 3
+        pin.position.y = PLOT + towers[focusIdx].h + drop
       }
 
-      if (!dragging && !reduceMotion && performance.now() - idleSince > 1200) yaw += dt * 0.05
-      dist += (targetDist - dist) * 0.1
-      fog.near = dist * 0.9
-      fog.far = dist * 2.4
-      towerMat.uniforms.uNear.value = fog.near
-      towerMat.uniforms.uFar.value = fog.far
-      camera.position.set(Math.sin(yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist)
-      camera.lookAt(0, 1.5, 0)
-      composer.render()
+      if (!dragging && !reduceMotion && performance.now() - idleSince > 1500) yaw += dt * 0.04
+      zoom += (targetZoom - zoom) * 0.12
+      camera.zoom = zoom
+      camera.updateProjectionMatrix()
+      const d = radius * 4 + 40
+      camera.position.set(Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, Math.cos(yaw) * Math.cos(pitch) * d)
+      camera.lookAt(target)
+      view.yaw = yaw; view.pitch = pitch; view.zoom = zoom
+      renderer.render(scene, camera)
 
       const label = labelRef.current
       if (label) {
         if (hoverIdx >= 0) {
           const tw = towers[hoverIdx]
-          bead.set(tw.x, tw.h, tw.z).project(camera)
+          bead.set(tw.x, PLOT + tw.h, tw.z).project(camera)
           label.style.transform = `translate(${(bead.x * 0.5 + 0.5) * mount.clientWidth}px, ${(-bead.y * 0.5 + 0.5) * mount.clientHeight}px)`
           label.style.opacity = '1'
         } else label.style.opacity = '0'
@@ -557,32 +545,43 @@ export default function CodeCity({
       el.removeEventListener('pointerdown', onDown)
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('wheel', onWheel)
-      disposables.forEach((d) => d.dispose())
+      disposables.forEach((x) => x.dispose())
       clearLit()
-      city.dispose(); slabs.dispose(); beads.dispose()
-      bloom.dispose()
-      composer.dispose()
+      city.dispose(); plotMesh.dispose(); beads.dispose()
+      sun.shadow.map?.dispose()
       renderer.dispose()
       mount.removeChild(el)
       apiRef.current = null
     }
-    // The city is rebuilt only when the graph itself changes.
+    // The model is rebuilt only when the graph or the theme changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges])
+  }, [nodes, edges, palette])
 
   useEffect(() => {
     apiRef.current?.focus(selected, highlight)
-  }, [selected, highlight, nodes, edges])
+  }, [selected, highlight, nodes, edges, palette])
+
+  // Reframe (without rebuilding) when the requested offset changes.
+  useEffect(() => {
+    apiRef.current?.reframe()
+  }, [offsetX])
 
   return (
-    <div className={`city ${className ?? ''}`}>
-      <div ref={mountRef} className="city-canvas" />
-      <div ref={labelRef} className="city-label" aria-hidden>
+    <div className={cn('relative overflow-hidden', className)}>
+      <div ref={mountRef} className="absolute inset-0 [&>canvas]:block [&>canvas]:size-full" />
+      <div
+        ref={labelRef}
+        aria-hidden
+        className="pointer-events-none absolute left-0 top-0 z-10 opacity-0 transition-opacity duration-150"
+      >
         {hover && (
-          <>
-            <strong>{hover.name ?? hover.id}</strong>
-            <span>{hover.filepath}{hover.lines ? `, ${hover.lines} lines` : ''}</span>
-          </>
+          <div className="-translate-x-1/2 -translate-y-[calc(100%+10px)] rounded-md border bg-popover px-2.5 py-1.5 shadow-sm">
+            <div className="font-mono text-[0.78rem] font-medium text-foreground">{hover.name ?? hover.id}</div>
+            <div className="font-mono text-[0.7rem] text-muted-foreground">
+              {hover.filepath}
+              {hover.lines ? <span className="font-sans">, {hover.lines} lines</span> : null}
+            </div>
+          </div>
         )}
       </div>
     </div>
