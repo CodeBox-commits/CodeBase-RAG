@@ -13,13 +13,14 @@ class FakeAgent:
     def __init__(self):
         self.calls = []
 
-    def run(self, question, repo_url, history=None):
+    def run(self, question, repo_url, history=None, allow_followup=True):
         self.calls.append((question, repo_url, history))
-        return {"answer": f"answer for {repo_url}", "citations": [], "status": "ok"}
+        self.allow_followup = allow_followup
+        return {"answer": f"answer for {repo_url}", "citations": [], "status": "ok", "followups": []}
 
-    def run_stream(self, question, repo_url, history=None):
+    def run_stream(self, question, repo_url, history=None, allow_followup=True):
         yield {"type": "step", "node": "query_planner", "data": {"query_type": "general"}}
-        yield {"type": "answer", "content": self.run(question, repo_url, history)["answer"]}
+        yield {"type": "answer", "content": self.run(question, repo_url, history, allow_followup)["answer"]}
 
 
 @pytest.fixture
@@ -86,6 +87,12 @@ def test_chat_passes_conversation_history(client, fake_agent):
     )
     assert res.status_code == 200
     assert fake_agent.calls[-1][2] == history
+    assert fake_agent.allow_followup is True
+    client.post(
+        "/api/v1/chat/",
+        json={"question": "Skip it", "repo_url": "https://github.com/a/b", "stream": False, "allow_followup": False},
+    )
+    assert fake_agent.allow_followup is False
     bad = client.post(
         "/api/v1/chat/",
         json={
@@ -108,13 +115,18 @@ def test_index_submits_normalised_url(client, monkeypatch):
     class FakeTask:
         id = "task-123"
 
-    monkeypatch.setattr(repo_module.process_repository, "delay", lambda url: submitted.append(url) or FakeTask())
+    monkeypatch.setattr(
+        repo_module.process_repository, "delay", lambda url, full: submitted.append((url, full)) or FakeTask()
+    )
 
     res = client.post("/api/v1/repo/index", json={"repo_url": "https://github.com/a/b.git/"})
 
     assert res.status_code == 200
     assert res.json()["task_id"] == "task-123"
-    assert submitted == ["https://github.com/a/b"]
+    assert submitted == [("https://github.com/a/b", False)]
+
+    client.post("/api/v1/repo/index", json={"repo_url": "https://github.com/a/b", "full": True})
+    assert submitted[-1] == ("https://github.com/a/b", True)
 
 
 @pytest.mark.skipif(

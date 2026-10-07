@@ -37,7 +37,7 @@ interface RepoContextValue {
   repos: Repo[]
   active: Repo | null
   setActive: (url: string) => void
-  index: (url: string) => Promise<Repo>
+  index: (url: string, full?: boolean) => Promise<Repo>
   /** Deletes the repository's index on the server, then forgets it here. */
   remove: (url: string) => Promise<void>
   chats: Record<string, Message[]>
@@ -105,8 +105,8 @@ export function RepoProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
-  async function index(url: string) {
-    const { task_id, repo_url } = await startIndex(url)
+  async function index(url: string, full = false) {
+    const { task_id, repo_url } = await startIndex(url, full)
     const repo: Repo = { url: repo_url, taskId: task_id, state: 'indexing', stage: 'PENDING', startedAt: Date.now() }
     setRepos((rs) => [repo, ...rs.filter((r) => r.url !== repo_url)])
     setActiveUrl(repo_url)

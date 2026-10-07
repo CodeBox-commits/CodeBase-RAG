@@ -132,6 +132,21 @@ class QdrantService:
         except Exception as e:
             logger.error(f"Failed to delete repository data from Qdrant: {e}")
 
+    def delete_files(self, repo_url: str, paths: list[str]):
+        """Removes the vectors of these files only (incremental re-indexing)."""
+        if not paths:
+            return
+        self._require_client().delete(
+            collection_name=self.collection_name,
+            points_selector=models.Filter(
+                must=[
+                    models.FieldCondition(key="repo_url", match=models.MatchValue(value=repo_url)),
+                    models.FieldCondition(key="filepath", match=models.MatchAny(any=paths)),
+                ]
+            ),
+            wait=True,
+        )
+
     def upsert_batch(self, repo_url: str, filepath: str, items: list[dict[str, Any]]):
         if not items:
             return

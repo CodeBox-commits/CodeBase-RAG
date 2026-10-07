@@ -7,6 +7,7 @@ import CodeViewer, { CitationChip, targetFromText, type CitationTarget } from '.
 import PipelineInspector from '../components/PipelineInspector'
 import MiniCity from '../components/MiniCity'
 import { navigate } from '../router'
+import { load, save } from '../storage'
 import { repoName, useRepos, type Message } from '../state'
 
 // Follow-up context sent with each question: the most recent finished messages.
@@ -83,6 +84,8 @@ export default function AskPage() {
   const [busy, setBusy] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [viewing, setViewing] = useState<CitationTarget | null>(null)
+  // Ask-for-more: the model may request missing code once (one more model call when it does).
+  const [allowFollowup, setAllowFollowup] = useState<boolean>(() => load('ask-followup', true))
   const listRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -126,7 +129,7 @@ export default function AskPage() {
     abortRef.current = controller
     try {
       let text = ''
-      await ask(q, repoUrl, history, {
+      await ask(q, repoUrl, { history, allowFollowup }, {
         onStep: (e) => patch((m) => ({ ...m, trace: [...(m.trace ?? []), e] })),
         onToken: (t) => {
           text += t
@@ -211,6 +214,18 @@ export default function AskPage() {
             {busy ? <span className="spinner tiny" /> : 'Ask'}
           </button>
         </form>
+        <label className="followup-toggle" title="If the context is missing code, the model can ask for it once before answering. Costs one more model call when it does.">
+          <input
+            type="checkbox"
+            checked={allowFollowup}
+            onChange={(e) => {
+              setAllowFollowup(e.target.checked)
+              save('ask-followup', e.target.checked)
+            }}
+          />
+          Fetch more code if the model needs it
+          <span className="muted"> · {allowFollowup ? 'on' : 'skipped: answers from the first search only'}</span>
+        </label>
       </section>
 
       <aside className="panel inspector-panel rise" style={{ animationDelay: '120ms' }}>

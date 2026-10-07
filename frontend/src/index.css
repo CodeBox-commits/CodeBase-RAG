@@ -488,6 +488,8 @@ code, .mono { font-family: var(--mono); font-size: 0.88em; }
   background: var(--ink); border: 1px solid var(--rule); border-radius: var(--r-sm); padding: 12px 14px; }
 .composer textarea:focus { outline: none; border-color: var(--lit); }
 .composer .btn { height: 48px; min-width: 76px; }
+.followup-toggle { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12.5px; color: var(--paper); cursor: pointer; user-select: none; }
+.followup-toggle input { accent-color: var(--lit); width: 14px; height: 14px; margin: 0; }
 
 /* inspector */
 .inspector-empty { text-align: center; padding: 56px 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
@@ -594,3 +596,5 @@ code, .mono { font-family: var(--mono); font-size: 0.88em; }
 .dual-bar span { display: block; height: 4px; animation: fill 0.8s both var(--ease); transform-origin: left; }
 .dual-bar .ce { background: var(--lit); }
 .dual-bar .rt { background: var(--cyan); opacity: 0.6; }
+
+.run-summary { font-size: 13px; color: var(--fog); margin: 12px 0 0; }
