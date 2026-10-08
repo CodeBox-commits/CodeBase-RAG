@@ -51,7 +51,7 @@ export default function CommandMenu({ open, onOpenChange }: { open: boolean; onO
         <CommandEmpty>Nothing matches. Symbols come from the repository selected at the top.</CommandEmpty>
         <CommandGroup heading="Pages">
           <CommandItem onSelect={() => run(() => navigate('/index'))}><FolderGit2 /> Index a repository</CommandItem>
-          <CommandItem onSelect={() => run(() => navigate('/explore'))}><Compass /> Explore the model</CommandItem>
+          <CommandItem onSelect={() => run(() => navigate('/explore'))}><Compass /> Explore the city</CommandItem>
           <CommandItem onSelect={() => run(() => navigate('/ask'))}><MessageSquareText /> Ask a question</CommandItem>
         </CommandGroup>
         {repos.length > 0 && (

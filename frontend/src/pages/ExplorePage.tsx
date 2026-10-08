@@ -82,7 +82,7 @@ function ImpactPanel({ report, visible, onPick }: { report: ImpactReport; visibl
         <strong className="display text-[1.5rem] text-thread">{report.files.length}</strong> {report.files.length === 1 ? 'file' : 'files'}, up to{' '}
         {report.depth} steps away.
       </p>
-      {hidden > 0 && <p className="mt-1.5 text-xs text-muted-foreground">{hidden} of them aren't among the blocks shown. Show more blocks to see them.</p>}
+      {hidden > 0 && <p className="mt-1.5 text-xs text-muted-foreground">{hidden} of them aren't among the towers shown. Show more towers to see them.</p>}
       <div className="mt-4 space-y-4">
         {report.files.map((f) => (
           <div key={f.filepath}>
@@ -121,7 +121,7 @@ function FilesPanel({ repo, query, setQuery, filepaths, file, setFile }: {
       <div className="border-b p-3">
         <h2 className="truncate font-mono text-[0.8rem] font-medium">{repoName(repo)}</h2>
         <label className="relative mt-2.5 block">
-          <span className="sr-only">Filter blocks by name</span>
+          <span className="sr-only">Filter towers by name</span>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
@@ -192,8 +192,8 @@ export default function ExplorePage() {
   // A symbol picked in the command menu.
   useEffect(() => {
     if (!focusSymbol || !nodes.length) return
-    if (byId.has(focusSymbol)) setSelected(focusSymbol)
-    else toast(`${focusSymbol.split('::')[1]} isn't among the ${nodes.length} blocks shown`, { description: 'Show more blocks to find it.' })
+    if (byId.has(focusSymbol)) { setSelected(focusSymbol); setImpact(null) }
+    else toast(`${focusSymbol.split('::')[1]} isn't among the ${nodes.length} towers shown`, { description: 'Show more towers to find it.' })
     setFocusSymbol(null)
   }, [focusSymbol, nodes, byId, setFocusSymbol])
 
@@ -201,6 +201,15 @@ export default function ExplorePage() {
     if (!impact?.report) return null
     const r = impact.report
     return new Set([...r.targets, ...r.affected].map((s) => nodeId(s.filepath, s.name)))
+  }, [impact])
+
+  // Impact mode: the changed symbol is hop 0, everything that depends on it pulses after.
+  const pulse = useMemo(() => {
+    if (!impact?.report) return null
+    const r = impact.report
+    const map = new Map<string, number>(r.targets.map((t) => [nodeId(t.filepath, t.name), 0]))
+    r.affected.forEach((a) => map.set(nodeId(a.filepath, a.name), a.hops))
+    return map
   }, [impact])
 
   const highlight = useMemo(() => {
@@ -240,7 +249,7 @@ export default function ExplorePage() {
   }, [selected, edges, byId])
 
   if (!active) {
-    return <EmptyState title="Nothing to explore yet" body="Index a repository to see it as a model you can walk." action={{ label: 'Index a repository', to: '/index' }} />
+    return <EmptyState title="Nothing to explore yet" body="Index a repository to see it as a city you can walk through." action={{ label: 'Index a repository', to: '/index' }} />
   }
   if (!ready) {
     return (
@@ -257,12 +266,12 @@ export default function ExplorePage() {
   const impactBusy = impact != null && !impact.report && !impact.error
 
   return (
-    <div className="relative h-[calc(100svh-3.5rem)] overflow-hidden drafting-grid">
+    <div className="relative h-[calc(100svh-3.5rem)] overflow-hidden bg-background">
       {/* The model or the graph, full bleed. */}
-      {loading && <p className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Building the model…</p>}
+      {loading && <p className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Building the city…</p>}
       {error && <p className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-check">{error}</p>}
       {!loading && !error && nodes.length > 0 && (view === 'model'
-        ? <CodeCity nodes={cityNodes} edges={edges} selected={selected} highlight={highlight} onSelect={pick} framing={1.02} offsetX={wide ? 0.09 : 0} className="absolute inset-0" />
+        ? <CodeCity nodes={cityNodes} edges={edges} selected={selected} highlight={highlight} pulse={pulse} onSelect={pick} districts offsetX={wide ? 0.09 : 0} className="absolute inset-0" />
         : <ForceGraph3D nodes={nodes} edges={edges} selected={selected} highlight={highlight} onSelect={pick} className="absolute inset-0" />
       )}
 
@@ -297,13 +306,13 @@ export default function ExplorePage() {
           <ToggleGroupItem value="graph" className="px-3">Graph</ToggleGroupItem>
         </ToggleGroup>
         <label className="flex items-center">
-          <span className="sr-only">Blocks shown</span>
+          <span className="sr-only">Towers shown</span>
           <select
             value={limit}
             onChange={(e) => { const n = Number(e.target.value); setLimit(n); save('explore-limit', n) }}
             className="h-8 rounded-md border bg-sheet px-2 text-xs"
           >
-            {LIMITS.map((n) => <option key={n} value={n}>Top {n} blocks</option>)}
+            {LIMITS.map((n) => <option key={n} value={n}>Top {n} towers</option>)}
           </select>
         </label>
       </div>
@@ -317,7 +326,7 @@ export default function ExplorePage() {
           <span className="flex items-center gap-1.5"><span aria-hidden className="h-0.5 w-4 rounded bg-thread" />call</span>
         </div>
         <p className="rounded-md bg-sheet/90 px-3 py-1 backdrop-blur">
-          {nodes.length} of {graph?.total_symbols ?? '?'} symbols, by number of links. {view === 'model' ? 'Drag to turn, scroll to zoom, click a block.' : 'Drag to turn, scroll to zoom, click a node.'}
+          {nodes.length} of {graph?.total_symbols ?? '?'} symbols, by number of links. {view === 'model' ? 'Drag to turn, scroll to zoom, click a tower.' : 'Drag to turn, scroll to zoom, click a node.'}
         </p>
       </div>
 
@@ -344,7 +353,7 @@ export default function ExplorePage() {
 
             <p className="mt-3 text-sm text-muted-foreground">
               Calls or contains <strong className="font-semibold text-foreground">{neighbours.out.length}</strong>, used by{' '}
-              <strong className="font-semibold text-foreground">{neighbours.inc.length}</strong> among the blocks shown.
+              <strong className="font-semibold text-foreground">{neighbours.inc.length}</strong> among the towers shown.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">

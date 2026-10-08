@@ -109,7 +109,7 @@ function RunSummary({ result }: { result: IndexResult }) {
   )
 }
 
-/** The finished repository rises as a model: the reward for waiting. */
+/** The finished repository rises as a city: the reward for waiting. */
 function BuiltModel({ url }: { url: string }) {
   const [graph, setGraph] = useState<RepoGraph | null>(null)
   useEffect(() => {
@@ -198,7 +198,7 @@ export default function IndexPage() {
   return (
     <div className="mx-auto grid max-w-[1600px] gap-10 px-4 py-10 sm:px-6 lg:grid-cols-12 lg:py-14 xl:px-10">
       <section className="lg:col-span-5">
-        <h1 className="display text-[clamp(3rem,6vw,5.2rem)]">Index a repository</h1>
+        <h1 className="display text-[clamp(2.2rem,4vw,3.4rem)]">Index a repository</h1>
         <p className="mt-4 max-w-[46ch] text-muted-foreground">
           Paste a public GitHub URL. Indexing it again later only re-embeds the files that changed.
         </p>
@@ -274,7 +274,7 @@ export default function IndexPage() {
                   changed files are re-embedded.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-2">
-                  <Button onClick={() => navigate('/explore')}><Compass /> Explore the model</Button>
+                  <Button onClick={() => navigate('/explore')}><Compass /> Explore the city</Button>
                   <Button variant="outline" className="bg-sheet" onClick={() => navigate('/ask')}><MessageSquareText /> Ask a question</Button>
                   <Button variant="ghost" onClick={() => submit(active.url)} disabled={busy}><RefreshCw /> Update</Button>
                 </div>
@@ -302,7 +302,7 @@ export default function IndexPage() {
                   </p>
                 )}
                 <div className="mt-6 flex flex-wrap gap-2">
-                  <Button onClick={() => navigate('/explore')}><Compass /> Explore the model</Button>
+                  <Button onClick={() => navigate('/explore')}><Compass /> Explore the city</Button>
                   <Button variant="outline" className="bg-sheet" onClick={() => navigate('/ask')}><MessageSquareText /> Ask a question</Button>
                 </div>
               </div>

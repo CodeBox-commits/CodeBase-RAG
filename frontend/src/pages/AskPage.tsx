@@ -202,7 +202,7 @@ export default function AskPage() {
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-8">
           {turns.length === 0 ? (
             <div className="mx-auto max-w-[68ch] py-16">
-              <h2 className="display text-[clamp(2.4rem,5vw,3.6rem)]">Ask about {repoName(repoUrl).split('/')[1] ?? repoName(repoUrl)}</h2>
+              <h2 className="display text-[clamp(1.9rem,3.4vw,2.7rem)]">Ask about {repoName(repoUrl).split('/')[1] ?? repoName(repoUrl)}</h2>
               <p className="mt-3 max-w-[56ch] text-muted-foreground">
                 Ask in plain English, and follow up. Every answer cites the file and line it comes from, and each citation is
                 checked against the code the model was shown.

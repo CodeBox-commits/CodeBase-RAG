@@ -11,7 +11,7 @@ import { navigate } from '../router'
 import { sampleCity } from '../sampleCity'
 import { repoName, useRepos } from '../state'
 
-// Everything on this page comes from the sample repository the hero model is built from
+// Everything on this page comes from the sample repository the hero city is built from
 // (sampleCity.ts): a small billing service. Nothing here is a real customer's code.
 
 const STEPS = [
@@ -106,7 +106,7 @@ export default function Home() {
 
   return (
     <>
-      {/* Hero: the sample repository as a massing model, with the headline beside it. */}
+      {/* Hero: the sample repository as a neon city, with the headline beside it. */}
       <section className="relative -mt-14 overflow-hidden pt-14">
         <div className="relative mx-auto grid min-h-[min(860px,calc(100svh-0px))] max-w-[1600px] grid-cols-1 lg:grid-cols-12">
           <CodeCity
@@ -114,21 +114,23 @@ export default function Home() {
             edges={city.edges}
             controls={false}
             tour
-            framing={1.02}
-            className="pointer-events-auto order-first h-[42svh] min-h-[300px] lg:absolute lg:inset-y-0 lg:right-[-3%] lg:left-[39%] lg:order-none lg:h-auto"
+            offsetX={0.2}
+            className="pointer-events-auto order-first h-[42svh] min-h-[300px] lg:absolute lg:inset-0 lg:order-none lg:h-auto"
           />
+          {/* Keeps the copy legible where towers run behind it. */}
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 hidden w-[58%] bg-gradient-to-r from-background via-background/80 to-transparent lg:block" />
           <div className="relative z-10 flex flex-col justify-center px-4 pb-14 sm:px-6 lg:col-span-6 lg:pb-24 xl:col-span-5 xl:pl-10">
             <motion.h1
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, ease: [0.2, 0.7, 0.2, 1] }}
-              className="display text-[clamp(3.4rem,8.4vw,8.25rem)]"
+              className="display text-[clamp(2.6rem,5vw,4.6rem)]"
             >
               Ask your codebase. Get the file and the line.
             </motion.h1>
             <p className="mt-6 max-w-[46ch] text-[1.06rem] leading-relaxed text-muted-foreground">
-              Index a Python, JavaScript or TypeScript repository. Every function and class becomes a block in a
-              model you can walk, every call a thread between them, and every answer cites code you can open.
+              Index a Python, JavaScript or TypeScript repository. Every function and class becomes a glowing tower
+              in a city you can walk, every call a light arc between them, and every answer cites code you can open.
             </p>
             <div className="mt-8 flex flex-wrap gap-2.5">
               <Button size="lg" onClick={() => navigate('/index')}>Index a repository</Button>
@@ -138,9 +140,9 @@ export default function Home() {
             </div>
           </div>
           <p className="relative z-10 px-4 pb-6 text-xs leading-relaxed text-muted-foreground sm:px-6 lg:absolute lg:bottom-6 lg:right-6 lg:max-w-sm lg:p-0 lg:text-right">
-            A sample billing service as a model. Each block is a{' '}
+            A sample billing service as a city. Each tower is a{' '}
             <Swatch kind="function" />function, <Swatch kind="method" />method or <Swatch kind="class" />class, as tall as its
-            code is long, standing on its file. The <span className="font-medium text-thread">thread</span> is a call.
+            code is long, standing on its file. Lit <span className="font-medium text-thread">arcs</span> are calls.
           </p>
         </div>
       </section>
@@ -150,7 +152,7 @@ export default function Home() {
         <div className="mx-auto max-w-[1600px] px-4 py-16 sm:px-6 xl:px-10">
           <div className="grid gap-10 lg:grid-cols-12">
             <div className="lg:col-span-4">
-              <h2 className="display text-[clamp(2.2rem,4vw,3.4rem)]">How a question gets answered</h2>
+              <h2 className="display text-[clamp(1.8rem,3vw,2.6rem)]">How a question gets answered</h2>
               <p className="mt-4 max-w-[40ch] text-muted-foreground">
                 The same six steps run for every question. On the Ask page each one opens up to show what it found.
               </p>
@@ -172,7 +174,7 @@ export default function Home() {
       <section id="answer" className="mx-auto max-w-[1600px] scroll-mt-20 px-4 py-20 sm:px-6 xl:px-10">
         <div className="grid items-start gap-10 lg:grid-cols-12">
           <div className="lg:col-span-5">
-            <h2 className="display text-[clamp(2.2rem,4vw,3.4rem)]">Every citation is checked against what the model saw</h2>
+            <h2 className="display text-[clamp(1.8rem,3vw,2.6rem)]">Every citation is checked against what the model saw</h2>
             <p className="mt-4 max-w-[46ch] text-muted-foreground">
               Click a citation to open the code with the line marked. Its sign says how far you can trust it.
             </p>
@@ -233,9 +235,9 @@ export default function Home() {
       <section className="border-t bg-sheet">
         <div className="mx-auto grid max-w-[1600px] gap-12 px-4 py-20 sm:px-6 lg:grid-cols-12 xl:px-10">
           <div className="lg:col-span-6">
-            <h2 className="display text-[clamp(2rem,3.4vw,2.9rem)]">See what breaks before you change it</h2>
+            <h2 className="display text-[clamp(1.6rem,2.6vw,2.2rem)]">See what breaks before you change it</h2>
             <p className="mt-4 max-w-[48ch] text-muted-foreground">
-              Pick a block and ask what depends on it: callers, subclasses and overrides, followed up to three calls back,
+              Pick a tower and ask what depends on it: callers, subclasses and overrides, followed up to three calls back,
               grouped by file with the closest first.
             </p>
             <div className="mt-6 rounded-xl border bg-background/50 p-5">
@@ -264,7 +266,7 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-5 lg:col-start-8">
-            <h2 className="display text-[clamp(2rem,3.4vw,2.9rem)]">Use it from your editor</h2>
+            <h2 className="display text-[clamp(1.6rem,2.6vw,2.2rem)]">Use it from your editor</h2>
             <p className="mt-4 max-w-[46ch] text-muted-foreground">
               The same lookups are tools for coding agents over MCP: search, definitions, callers and callees, impact, and
               cited answers. Everything except answers is an exact graph lookup, with no model calls.
@@ -285,7 +287,7 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-[1600px] px-4 py-24 sm:px-6 xl:px-10">
-        <h2 className="display max-w-[16ch] text-[clamp(2.6rem,5.4vw,4.6rem)]">Start with a repository you know well</h2>
+        <h2 className="display max-w-[16ch] text-[clamp(2rem,4vw,3.2rem)]">Start with a repository you know well</h2>
         <p className="mt-4 max-w-[52ch] text-muted-foreground">
           You'll be able to tell straight away whether the answers are right. Public GitHub repositories only.
         </p>
