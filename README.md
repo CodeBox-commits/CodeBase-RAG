@@ -87,17 +87,21 @@ ask a question. Check that everything is up with `curl -s localhost:8000/ready`,
 A LangGraph state machine, with one model call to plan and one to answer:
 
 ```mermaid
-flowchart LR
-    Q([Question]) --> P["Plan<br/>type, symbols, queries"]
-    P --> R["Route<br/>vector · hybrid · graph"]
-    R --> E["Embed<br/>local bge-small"]
-    E --> S["Search<br/>vectors + BM25"]
-    S --> K["Rerank<br/>local cross-encoder"]
-    K --> G["Walk the graph<br/>callers, callees, overrides"]
-    G --> A["Answer<br/>from that context only"]
-    A -.->|"NEED: missing code"| F["Ask for more"]
-    F --> A
-    A --> C(["Check every citation"])
+flowchart TB
+    subgraph understand["1 · Understand"]
+        direction LR
+        Q([Question]) --> P["Plan<br/>type, symbols, queries"] --> R["Route<br/>vector · hybrid · graph"]
+    end
+    subgraph retrieve["2 · Retrieve (local, no model calls)"]
+        direction LR
+        E["Embed<br/>bge-small"] --> S["Search<br/>vectors + BM25"] --> K["Rerank<br/>cross-encoder"] --> G["Walk the graph<br/>callers, callees, overrides"]
+    end
+    subgraph answer["3 · Answer"]
+        direction LR
+        A["Write the answer<br/>from that context only"] --> C(["Check every citation"])
+        A -.->|"NEED: missing code"| F["Ask for more"] -.-> A
+    end
+    understand --> retrieve --> answer
 ```
 
 1. **Plan:** one Gemini call classifies the question, pulls out symbol names and writes up to three search queries.
