@@ -271,7 +271,7 @@ export default function Home() {
               The same lookups are tools for coding agents over MCP: search, definitions, callers and callees, impact, and
               cited answers. Everything except answers is an exact graph lookup, with no model calls.
             </p>
-            <div className="mt-6 overflow-hidden rounded-xl border bg-[#0d0a22] text-[#e8e4f7]">
+            <div className="mt-6 overflow-hidden rounded-xl border bg-[#09080e] text-[#e9e8f0]">
               <p className="border-b border-white/10 px-4 py-2.5 text-xs text-white/60">Add it to Claude Code</p>
               <pre className="overflow-x-auto px-4 py-4 font-mono text-[0.8rem] leading-relaxed">
                 <span className="text-white/45">$ </span>claude mcp add --transport http codebox http://localhost:8000/mcp

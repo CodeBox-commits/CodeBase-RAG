@@ -135,7 +135,7 @@ function RoutePanel({ strategy }: { strategy: string }) {
             key={r}
             className={cn(
               'flex-1 rounded-md border px-2 py-1 text-center text-[0.76rem]',
-              r === strategy ? 'glow border-thread bg-thread/15 text-thread' : 'text-muted-foreground',
+              r === strategy ? 'border-thread/50 bg-thread/10 text-thread' : 'text-muted-foreground',
             )}
           >
             {r}
@@ -409,7 +409,7 @@ function StepMarker({ state, n }: { state: StepState; n: number }) {
     <span
       className={cn(
         'relative z-10 grid size-6 shrink-0 place-items-center rounded-full border text-[0.72rem] font-semibold tabular-nums',
-        state === 'done' && 'border-thread bg-thread text-[#160936]',
+        state === 'done' && 'border-rule bg-sheet-2 text-graphite',
         state === 'active' && 'border-transparent bg-sheet-2 text-thread',
         state === 'failed' && 'border-check bg-check text-white',
         state === 'pending' && 'bg-sheet text-muted-foreground',
@@ -457,7 +457,7 @@ export default function PipelineInspector({ msg, question }: { msg: Message | nu
               {i < steps.length - 1 && (
                 <motion.span
                   aria-hidden
-                  className="absolute bottom-0 left-3 top-6 w-px origin-top bg-thread shadow-[0_0_8px_var(--thread)]"
+                  className="absolute bottom-0 left-3 top-6 w-px origin-top bg-pencil/45"
                   initial={false}
                   animate={{ scaleY: st === 'done' ? 1 : 0 }}
                   transition={{ duration: 0.35, ease: [0.2, 0.7, 0.2, 1] }}

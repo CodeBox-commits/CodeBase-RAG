@@ -238,7 +238,7 @@ export default function AskPage() {
                       <div
                         className={cn(
                           'relative mt-3 border-l-2 pl-4 transition-colors',
-                          isSelected ? 'border-thread' : 'border-transparent hover:border-rule',
+                          isSelected ? 'border-graphite/25' : 'border-transparent hover:border-rule',
                         )}
                         onClick={() => setSelectedId(a.id)}
                       >

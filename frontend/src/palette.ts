@@ -29,12 +29,12 @@ export function readPalette(): ModelPalette {
   const thread = c('--thread', '#b18cff')
   return {
     dark: true,
-    ground: c('--film', '#140f2e'),
-    plot: c('--sheet', '#1b1540'),
-    shadow: 0x05030f,
-    graphite: c('--graphite', '#eeeaf8'),
-    pencil: c('--pencil', '#a49cc8'),
-    rule: c('--rule', '#3a2f6e'),
+    ground: c('--film', '#0e0d14'),
+    plot: c('--sheet', '#16151f'),
+    shadow: 0x040308,
+    graphite: c('--graphite', '#edecf3'),
+    pencil: c('--pencil', '#a5a1b8'),
+    rule: c('--rule', '#34314a'),
     thread,
     highlight: c('--highlight', '#ffc96b'),
     kinds: {
@@ -45,7 +45,7 @@ export function readPalette(): ModelPalette {
     edges: {
       CALLS: thread,
       INHERITS: c('--kind-class', '#ff7aa8'),
-      HAS_METHOD: 0x4a3c8c,
+      HAS_METHOD: 0x4a4560,
       OVERRIDES: c('--highlight', '#ffc96b'),
     },
   }

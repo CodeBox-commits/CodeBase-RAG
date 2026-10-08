@@ -86,7 +86,7 @@ function Track({ track, done, active }: { track: UiStep[]; done: Set<UiStep>; ac
                 animate={{ scale: isActive ? 1.08 : 1 }}
                 className={cn(
                   'relative grid size-7 place-items-center rounded-full border transition-colors duration-300',
-                  isDone && 'border-thread bg-thread text-[#160936] shadow-[0_0_10px_rgb(177_140_255/0.6)]',
+                  isDone && 'border-rule bg-sheet-2 text-graphite',
                   isActive && 'border-transparent bg-sheet-2 text-thread',
                   !isDone && !isActive && 'bg-sheet text-muted-foreground/60',
                 )}
@@ -128,7 +128,7 @@ function Chip({ children, i, tone = 'thread' }: { children: string; i: number; t
       transition={{ delay: i * 0.06, type: 'spring', stiffness: 420, damping: 24 }}
       className={cn(
         'inline-block rounded-md border px-2 py-0.5 font-mono text-[0.76rem]',
-        tone === 'thread' ? 'border-thread/60 bg-thread/15 text-thread shadow-[0_0_10px_rgb(177_140_255/0.3)]' : 'border-[var(--kind-method)]/50 bg-[var(--kind-method)]/10 text-[var(--kind-method)]',
+        tone === 'thread' ? 'border-thread/45 bg-thread/10 text-thread' : 'border-[var(--kind-method)]/50 bg-[var(--kind-method)]/10 text-[var(--kind-method)]',
       )}
     >
       {children}
@@ -163,7 +163,7 @@ function PlanResult({ plan, route }: { plan: Data; route?: string }) {
         <div className="flex gap-1">
           {(['vector', 'hybrid', 'graph'] as const).map((r) => (
             <span key={r} className="relative flex-1 rounded-md border px-2 py-1 text-center text-[0.74rem] text-muted-foreground">
-              {r === route && <motion.span layoutId="live-route" className="glow absolute inset-0 rounded-md bg-thread/20" />}
+              {r === route && <motion.span layoutId="live-route" className="absolute inset-0 rounded-md border border-thread/50 bg-thread/10" />}
               <span className={cn('relative', r === route && 'text-thread')}>{r}</span>
             </span>
           ))}
@@ -511,7 +511,7 @@ export default function LivePipeline({ msg, question, onOpen }: { msg: Message; 
   const backed = cited.filter((c) => c.status === 'verified' || c.status === 'graph').length
 
   return (
-    <div className={cn('rounded-xl border transition-colors duration-500', staging ? 'glow mb-4 border-thread/40 bg-sheet/80 p-4' : 'mb-3 border-transparent')}>
+    <div className={cn('rounded-xl border transition-colors duration-500', staging ? 'mb-4 border-rule bg-sheet/80 p-4' : 'mb-3 border-transparent')}>
       <div className="flex items-center gap-3">
         <div className={cn('min-w-0 transition-all duration-500', staging ? 'flex-1' : 'w-56 shrink-0 sm:w-72')}>
           <Track track={track} done={done} active={active} />

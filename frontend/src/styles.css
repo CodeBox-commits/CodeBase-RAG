@@ -5,8 +5,9 @@
 @import '@fontsource/ibm-plex-mono/500.css';
 
 /*
- * A neon city at night: deep indigo ground, lilac-white text, and violet reserved for what
- * is lit (selected, running, a call being followed). Symbol kinds glow lime (functions),
+ * A neon city at night: a near-black ground with only a breath of violet, cool white text, and
+ * violet reserved for what is lit (selected, running, a call being followed). Finished things
+ * go quiet: they're neutral, not violet. Symbol kinds glow lime (functions),
  * cyan (methods) and rose (classes). The token names below are the semantic roles the
  * components use; three.js reads the same variables (palette.ts).
  *
@@ -19,13 +20,13 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --film: #140f2e;        /* ground */
-  --sheet: #1b1540;       /* raised surfaces */
-  --sheet-2: #251d52;
-  --graphite: #eeeaf8;    /* text */
-  --pencil: #a49cc8;      /* secondary text */
-  --rule: #3a2f6e;
-  --rule-soft: #261f50;
+  --film: #0e0d14;        /* ground: near-black, a breath of violet */
+  --sheet: #16151f;       /* raised surfaces */
+  --sheet-2: #1f1d2b;
+  --graphite: #edecf3;    /* text */
+  --pencil: #a5a1b8;      /* secondary text */
+  --rule: #34314a;
+  --rule-soft: #222030;
   --thread: #b18cff;      /* lit */
   --thread-soft: rgb(177 140 255 / 0.16);
   --highlight: #ffc96b;
@@ -42,7 +43,7 @@
   --foreground: var(--graphite);
   --card: var(--sheet);
   --card-foreground: var(--graphite);
-  --popover: #1e1747;
+  --popover: #1a1925;
   --popover-foreground: var(--graphite);
   --primary: var(--thread);
   --primary-foreground: var(--lit-ink);
@@ -50,7 +51,7 @@
   --secondary-foreground: var(--graphite);
   --muted: var(--sheet-2);
   --muted-foreground: var(--pencil);
-  --accent: #2a2160;
+  --accent: #282536;
   --accent-foreground: var(--graphite);
   --destructive: var(--check);
   --border: var(--rule);
@@ -194,16 +195,16 @@
 
 /* Shiki (css-variables theme): token colours from the neon palette. */
 :root {
-  --shiki-foreground: #ddd7f0;
+  --shiki-foreground: #dddbe7;
   --shiki-background: transparent;
   --shiki-token-constant: #ffc96b;
   --shiki-token-string: #a3ee7f;
-  --shiki-token-comment: #7d74a8;
+  --shiki-token-comment: #8a85a0;
   --shiki-token-keyword: #b18cff;
   --shiki-token-parameter: #ffb3cd;
   --shiki-token-function: #5fd6f2;
   --shiki-token-string-expression: #a3ee7f;
-  --shiki-token-punctuation: #a49cc8;
+  --shiki-token-punctuation: #a5a1b8;
   --shiki-token-link: #b18cff;
 }
 
@@ -259,7 +260,7 @@
   filter: drop-shadow(0 0 4px var(--thread));
 }
 @utility wire-done {
-  background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--thread) 70%, transparent) 0 10px, color-mix(in srgb, var(--thread) 35%, transparent) 10px 18px);
+  background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--pencil) 55%, transparent) 0 10px, color-mix(in srgb, var(--pencil) 25%, transparent) 10px 18px);
   background-size: 36px 100%;
   animation: wire-flow 1.6s linear infinite;
 }

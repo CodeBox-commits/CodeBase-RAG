@@ -51,12 +51,12 @@ interface Tower { node: CityNode; x: number; z: number; h: number; w: number }
 interface District { name: string; x: number; z: number; count: number }
 
 const CITY = {
-  body: 0x1a1440, // tower glass, before its neon edges and windows
-  plot: 0x1b1540,
-  plotEdge: 0x4a3c8c,
-  grid: 0x221b4a,
-  gridMajor: 0x3a2f6e,
-  horizon: 0x3b2477,
+  body: 0x15141e, // tower glass, before its neon edges and windows
+  plot: 0x16151f,
+  plotEdge: 0x3e3a55,
+  grid: 0x1c1b27,
+  gridMajor: 0x2e2b3f,
+  horizon: 0x2a1f4a,
 }
 
 const dirname = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
@@ -333,7 +333,7 @@ export default function CodeCity({
     const mirror = new Reflector(keep(new THREE.PlaneGeometry(streetSize, streetSize)), {
       textureWidth: 512,
       textureHeight: 512,
-      color: 0x3d3566,
+      color: 0x34313f,
       clipBias: 0.003,
     })
     mirror.rotation.x = -Math.PI / 2
@@ -827,7 +827,7 @@ export default function CodeCity({
           aria-hidden
           className="pointer-events-none absolute left-0 top-0 z-[5] opacity-0 transition-opacity duration-300"
         >
-          <span className="block -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-thread/30 bg-[#140f2e]/70 px-2.5 py-0.5 font-mono text-[0.7rem] text-thread shadow-[0_0_14px_rgb(177_140_255/0.25)] backdrop-blur-sm">
+          <span className="block -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-thread/30 bg-film/70 px-2.5 py-0.5 font-mono text-[0.7rem] text-thread shadow-[0_0_14px_rgb(177_140_255/0.25)] backdrop-blur-sm">
             {d.name}
           </span>
         </div>

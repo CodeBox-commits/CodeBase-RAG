@@ -316,7 +316,7 @@ export default function IndexPage() {
                       <span
                         className={cn(
                           'relative z-10 grid size-6 shrink-0 place-items-center rounded-full border text-[0.72rem] font-semibold tabular-nums',
-                          state === 'done' && 'border-thread bg-thread text-[#160936]',
+                          state === 'done' && 'border-rule bg-sheet-2 text-graphite',
                           state === 'active' && 'glow border-thread bg-thread/20 text-thread',
                           state === 'pending' && 'bg-sheet text-muted-foreground',
                         )}
@@ -348,7 +348,7 @@ export default function IndexPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-check text-white hover:bg-check/90">Delete</AlertDialogAction>
+            <AlertDialogAction variant="destructive" onClick={confirmDelete}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
