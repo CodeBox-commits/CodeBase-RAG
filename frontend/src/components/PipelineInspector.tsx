@@ -71,22 +71,33 @@ function Tokens({ items, mono = true }: { items: string[]; mono?: boolean }) {
 }
 
 function Hit({ rank, symbol, location, children }: { rank: ReactNode; symbol: string; location: string; children?: ReactNode }) {
+  const i = typeof rank === 'number' ? rank - 1 : 0
   return (
-    <li className="grid grid-cols-[1.5rem_1fr] gap-2 py-1.5">
+    <motion.li
+      initial={{ opacity: 0, x: 12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: Math.min(i, 12) * 0.035, duration: 0.22 }}
+      className="grid grid-cols-[1.5rem_1fr] gap-2 py-1.5"
+    >
       <span className="pt-0.5 text-right text-[0.72rem] text-muted-foreground tabular-nums">{rank}</span>
       <div className="min-w-0">
         <div className="truncate font-mono text-[0.78rem] font-medium">{symbol}</div>
         <div className="truncate font-mono text-[0.7rem] text-muted-foreground">{location}</div>
         {children}
       </div>
-    </li>
+    </motion.li>
   )
 }
 
 function Bar({ value, className }: { value: number; className?: string }) {
   return (
     <span className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-rule-soft" aria-hidden>
-      <span className={cn('block h-full rounded-full bg-pencil/70', className)} style={{ width: `${Math.max(3, Math.min(1, value) * 100)}%` }} />
+      <motion.span
+        className={cn('block h-full rounded-full bg-pencil/70', className)}
+        initial={{ width: 0 }}
+        animate={{ width: `${Math.max(3, Math.min(1, value) * 100)}%` }}
+        transition={{ duration: 0.5, ease: [0.2, 0.7, 0.2, 1] }}
+      />
     </span>
   )
 }
@@ -202,8 +213,7 @@ function RerankPanel({ data }: { data: Data }) {
   return (
     <div>
       <p className="text-[0.8rem] text-muted-foreground">
-        Kept {data.kept} of {data.candidates}
-        {data.ms != null && ` in ${Math.round(data.ms)} ms`}, using <span className="font-mono">{data.model ?? 'no reranker'}</span>.
+        Kept {data.kept} of {data.candidates}, using <span className="font-mono">{data.model ?? 'no reranker'}</span>.
       </p>
       {!data.applied && <p className="mt-1.5 text-[0.8rem] text-check">Not applied{data.error ? `: ${data.error}` : ''}. The search order was kept.</p>}
       <ol className="mt-2 divide-y divide-rule-soft">
@@ -370,12 +380,11 @@ function FetchMorePanel({ data }: { data: Data }) {
 
 function StepBody({ node, event, msg }: { node: UiStep; event?: StepEvent; msg: Message }) {
   if (node === 'generate') {
-    if (msg.pending || !msg.finishedAt || !msg.startedAt) return null
+    if (msg.pending) return null
     const cites = msg.citations ?? []
     const ok = cites.filter((c) => c.status === 'verified' || c.status === 'graph').length
     return (
       <p className="text-[0.8rem] text-muted-foreground">
-        Answered in {((msg.finishedAt - msg.startedAt) / 1000).toFixed(1)} s.{' '}
         {cites.length ? `${ok} of ${cites.length} citations backed by the context.` : 'No citations to check.'}
       </p>
     )
@@ -393,19 +402,27 @@ function StepBody({ node, event, msg }: { node: UiStep; event?: StepEvent; msg: 
 
 function StepMarker({ state, n }: { state: StepState; n: number }) {
   return (
+    <span className="relative z-10 grid size-6 shrink-0 place-items-center">
+      {state === 'active' && (
+        <span aria-hidden className="absolute -inset-[3px] animate-spin rounded-full bg-[conic-gradient(from_0deg,transparent_0deg,var(--thread)_300deg,transparent_360deg)] [animation-duration:0.9s]" />
+      )}
     <span
       className={cn(
         'relative z-10 grid size-6 shrink-0 place-items-center rounded-full border text-[0.72rem] font-semibold tabular-nums',
         state === 'done' && 'border-thread bg-thread text-[#160936]',
-        state === 'active' && 'glow border-thread bg-thread/20 text-thread',
+        state === 'active' && 'border-transparent bg-sheet-2 text-thread',
         state === 'failed' && 'border-check bg-check text-white',
         state === 'pending' && 'bg-sheet text-muted-foreground',
       )}
     >
       {state === 'done' ? <Check className="size-3.5" /> : state === 'failed' ? <X className="size-3.5" /> : n}
     </span>
+    </span>
   )
 }
+
+// Keeps the running step in view as the pipeline moves down the panel.
+const scrollIntoView = (el: HTMLLIElement | null) => el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
 
 export default function PipelineInspector({ msg, question }: { msg: Message | null; question?: string }) {
   const [closed, setClosed] = useState<Set<UiStep>>(new Set())
@@ -436,7 +453,16 @@ export default function PipelineInspector({ msg, question }: { msg: Message | nu
           const st = states[s.node]
           const open = st === 'done' && !closed.has(s.node)
           return (
-            <li key={s.node} className="relative flex gap-3 pb-4 last:pb-0">
+            <li key={s.node} ref={st === 'active' ? scrollIntoView : undefined} className="relative flex gap-3 pb-4 last:pb-0">
+              {i < steps.length - 1 && (
+                <motion.span
+                  aria-hidden
+                  className="absolute bottom-0 left-3 top-6 w-px origin-top bg-thread shadow-[0_0_8px_var(--thread)]"
+                  initial={false}
+                  animate={{ scaleY: st === 'done' ? 1 : 0 }}
+                  transition={{ duration: 0.35, ease: [0.2, 0.7, 0.2, 1] }}
+                />
+              )}
               <StepMarker state={st} n={i + 1} />
               <div className="min-w-0 flex-1 pt-0.5">
                 <button
@@ -446,7 +472,7 @@ export default function PipelineInspector({ msg, question }: { msg: Message | nu
                   onClick={() => setClosed((c) => { const n = new Set(c); if (n.has(s.node)) n.delete(s.node); else n.add(s.node); return n })}
                 >
                   <span className={cn('text-sm font-semibold', st === 'pending' && 'text-muted-foreground')}>{s.label}</span>
-                  {st === 'active' && <span className="text-xs text-muted-foreground">running</span>}
+                  {st === 'active' && <span className="animate-pulse text-xs text-thread">running</span>}
                   {st === 'done' && <ChevronDown className={cn('ml-auto size-3.5 text-muted-foreground transition-transform', open && 'rotate-180')} />}
                 </button>
                 <p className="mt-0.5 text-[0.76rem] leading-snug text-muted-foreground">{s.sub}</p>

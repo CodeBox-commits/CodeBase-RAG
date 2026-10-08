@@ -226,3 +226,40 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* The live pipeline on the Ask page: packets on the wire, a reading beam, bouncing vectors. */
+@keyframes wire-flow {
+  from { background-position: 0 0; }
+  to { background-position: 36px 0; }
+}
+@keyframes beam-x {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(520%); }
+}
+@keyframes beam-y {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(900%); }
+}
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+@keyframes word-lit {
+  0%, 100% { color: var(--pencil); text-shadow: none; }
+  45% { color: var(--graphite); text-shadow: 0 0 12px var(--thread); }
+}
+@keyframes ping-ring {
+  from { transform: scale(0.6); opacity: 0.9; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+@utility wire-live {
+  background-image: repeating-linear-gradient(90deg, var(--thread) 0 8px, transparent 8px 18px);
+  background-size: 36px 100%;
+  animation: wire-flow 0.6s linear infinite;
+  filter: drop-shadow(0 0 4px var(--thread));
+}
+@utility wire-done {
+  background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--thread) 70%, transparent) 0 10px, color-mix(in srgb, var(--thread) 35%, transparent) 10px 18px);
+  background-size: 36px 100%;
+  animation: wire-flow 1.6s linear infinite;
+}

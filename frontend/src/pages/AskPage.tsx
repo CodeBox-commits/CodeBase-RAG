@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { ArrowUp, ListTree, RotateCcw, Square } from 'lucide-react'
+import { ArrowUp, RotateCcw, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -12,6 +12,7 @@ import { ask, type ChatTurn } from '../api'
 import { CITATION_ONLY, citationSummary, findCitation, linkifyCitations } from '../citations'
 import CodeViewer, { CitationChip, targetFromText, type CitationTarget } from '../components/CodeViewer'
 import EmptyState from '../components/EmptyState'
+import LivePipeline, { usePaced } from '../components/LivePipeline'
 import PipelineInspector from '../components/PipelineInspector'
 import { repoName, useRepos, type Message } from '../state'
 import { load, save } from '../storage'
@@ -33,6 +34,11 @@ const SUGGESTIONS = [
   'Where can errors be raised during the main flow?',
   'Give me a short tour of how the code is organised.',
 ]
+
+/** The inspector, revealing steps at the same pace as the live pipeline above the answer. */
+function PacedInspector({ msg, question }: { msg: Message; question?: string }) {
+  return <PipelineInspector msg={usePaced(msg)} question={question} />
+}
 
 const uid = () => Math.random().toString(36).slice(2)
 
@@ -73,25 +79,6 @@ function Answer({ msg, onCite }: { msg: Message; onCite: (t: CitationTarget) => 
   )
 }
 
-function Thinking({ msg }: { msg: Message }) {
-  const last = msg.trace?.at(-1)?.node
-  const label: Record<string, string> = {
-    query_planner: 'Planning the search',
-    retrieval_router: 'Choosing a route',
-    embed_queries: 'Embedding the queries',
-    retrieve: 'Searching',
-    rerank: 'Reranking',
-    graph_search: 'Writing the answer',
-    fetch_more: 'Writing the answer with the code it asked for',
-  }
-  return (
-    <p className="flex items-center gap-2.5 text-sm text-muted-foreground" aria-live="polite">
-      <span aria-hidden className="size-2 animate-pulse rounded-full bg-thread shadow-[0_0_8px_var(--thread)]" />
-      {last ? label[last] ?? 'Working' : 'Starting'}…
-    </p>
-  )
-}
-
 export default function AskPage() {
   const { active, chats, updateChat } = useRepos()
   const messages = active ? chats[active.url] ?? [] : []
@@ -117,6 +104,21 @@ export default function AskPage() {
   }, [messages.length, lastContent])
   useEffect(() => () => abortRef.current?.abort(), [])
 
+  // The live pipeline grows as it plays: keep the newest answer in view while the reader is at
+  // the bottom, and leave them be once they scroll up.
+  const stick = useRef(true)
+  const hasTurns = messages.length > 0
+  useEffect(() => {
+    const el = listRef.current
+    const inner = el?.firstElementChild
+    if (!el || !inner) return
+    const onScroll = () => { stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140 }
+    const ro = new ResizeObserver(() => { if (stick.current) el.scrollTop = el.scrollHeight })
+    el.addEventListener('scroll', onScroll, { passive: true })
+    ro.observe(inner)
+    return () => { ro.disconnect(); el.removeEventListener('scroll', onScroll) }
+  }, [hasTurns, active?.url, active?.state])
+
   if (!active || active.state !== 'ready') {
     return (
       <EmptyState
@@ -140,6 +142,7 @@ export default function AskPage() {
 
     updateChat(repoUrl, (ms) => [...ms, { id: uid(), role: 'user', content: q }, reply])
     setSelectedId(reply.id)
+    stick.current = true
     setInput('')
     setBusy(true)
     const controller = new AbortController()
@@ -239,12 +242,15 @@ export default function AskPage() {
                         )}
                         onClick={() => setSelectedId(a.id)}
                       >
-                        {a.pending && !a.content ? <Thinking msg={a} /> : <Answer msg={a} onCite={setViewing} />}
-                        <div className="mt-3 lg:hidden">
-                          <Button variant="outline" size="xs" className="bg-sheet" onClick={(e) => { e.stopPropagation(); setSelectedId(a.id); setInspectorOpen(true) }}>
-                            <ListTree /> How this was answered
-                          </Button>
-                        </div>
+                        <LivePipeline
+                          msg={a}
+                          question={q.content}
+                          onOpen={() => {
+                            setSelectedId(a.id)
+                            if (!window.matchMedia('(min-width: 1024px)').matches) setInspectorOpen(true)
+                          }}
+                        />
+                        {a.content && <Answer msg={a} onCite={setViewing} />}
                       </div>
                     )}
                   </motion.li>
@@ -303,13 +309,13 @@ export default function AskPage() {
 
       <aside className="hidden min-h-0 overflow-y-auto border-l bg-sheet lg:block" aria-label="How this answer was built">
         <h2 className="sticky top-0 z-10 border-b bg-sheet/95 px-4 py-3 text-sm font-semibold backdrop-blur">How this answer was built</h2>
-        <PipelineInspector msg={selected} question={selectedQuestion} />
+        {selected ? <PacedInspector key={selected.id} msg={selected} question={selectedQuestion} /> : <PipelineInspector msg={null} />}
       </aside>
 
       <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto bg-sheet p-0 sm:max-w-md">
           <SheetTitle className="border-b px-4 py-3 text-sm">How this answer was built</SheetTitle>
-          <PipelineInspector msg={selected} question={selectedQuestion} />
+          {selected ? <PacedInspector key={selected.id} msg={selected} question={selectedQuestion} /> : <PipelineInspector msg={null} />}
         </SheetContent>
       </Sheet>
 
