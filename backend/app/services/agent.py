@@ -960,6 +960,11 @@ class CodeAgent:
                 {k: r.get(k) for k in ("symbol", "filepath", "start_line", "end_line", "chunk_type", "reason")}
                 for r in state.get("expanded_results", [])
             ]
+            # The code the model is about to read, so the UI can show citations landing on it.
+            data["context"] = [
+                {k: r.get(k) for k in ("symbol", "filepath", "start_line", "end_line")}
+                for r in [*state.get("vector_results", []), *state.get("expanded_results", [])]
+            ]
         return {"type": "step", "node": node, "data": data, "errors": list(state.get("errors", []))}
 
     @staticmethod

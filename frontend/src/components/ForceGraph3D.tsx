@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { cn } from '@/lib/utils'
 import type { GraphEdge, GraphNode } from '../api'
-
-import { EDGE_COLORS, KIND_COLORS } from '../palette'
-
-export { EDGE_COLORS, KIND_COLORS }
+import { useModelPalette } from '../palette'
 
 interface Props {
   nodes: GraphNode[]
@@ -45,6 +43,7 @@ export default function ForceGraph3D({
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
   const [hover, setHover] = useState<GraphNode | null>(null)
+  const pal = useModelPalette()
 
   useEffect(() => {
     const mount = mountRef.current
@@ -91,7 +90,7 @@ export default function ForceGraph3D({
     const sizes = new Float32Array(sim.length)
     const col = new THREE.Color()
     sim.forEach((s, i) => {
-      col.setHex(KIND_COLORS[s.node.kind] ?? 0xc9d4ff)
+      col.setHex(pal.kinds[s.node.kind] ?? 0xc9d4ff)
       col.toArray(baseColors, i * 3)
       col.toArray(colors, i * 3)
       sizes[i] = (s.node.anchor ? 6 : 3) + Math.min(s.degree, 20) * 0.35
@@ -126,7 +125,7 @@ export default function ForceGraph3D({
     const lineCol = new Float32Array(links.length * 6)
     const lineBase = new Float32Array(links.length * 6)
     links.forEach((l, k) => {
-      col.setHex(EDGE_COLORS[l.type] ?? 0x8890b0)
+      col.setHex(pal.edges[l.type] ?? 0x8890b0)
       col.toArray(lineBase, k * 6)
       col.toArray(lineBase, k * 6 + 3)
     })
@@ -370,21 +369,24 @@ export default function ForceGraph3D({
     }
     // The scene is rebuilt only when the graph itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges])
+  }, [nodes, edges, pal])
 
   useEffect(() => {
     apiRef.current?.setFocus(selected, highlight)
-  }, [selected, highlight, nodes, edges])
+  }, [selected, highlight, nodes, edges, pal])
 
   return (
-    <div className={`fg3d ${className ?? ''}`}>
-      <div ref={mountRef} className="fg3d-canvas" />
-      <div ref={labelRef} className="fg3d-label" aria-hidden>
+    <div className={cn('relative overflow-hidden', className)}>
+      <div ref={mountRef} className="absolute inset-0 [&>canvas]:block [&>canvas]:size-full" />
+      <div ref={labelRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-10 opacity-0 transition-opacity duration-150">
         {hover && (
-          <>
-            <strong>{hover.name ?? hover.id}</strong>
-            <span>{hover.kind}{hover.filepath ? ` · ${hover.filepath}` : ''}</span>
-          </>
+          <div className="-translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-md border border-thread/40 bg-popover/95 px-2.5 py-1.5 shadow-[0_0_20px_rgb(177_140_255/0.25)] backdrop-blur">
+            <div className="font-mono text-[0.78rem] font-medium">{hover.name ?? hover.id}</div>
+            <div className="text-[0.7rem] text-muted-foreground">
+              {hover.kind}
+              {hover.filepath ? <> in <span className="font-mono">{hover.filepath}</span></> : null}
+            </div>
+          </div>
         )}
       </div>
     </div>

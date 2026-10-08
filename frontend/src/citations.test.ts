@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CITATION_ONLY, citationSummary, findCitation, linkifyCitations, type Citation } from './citations'
+import { CITATION_ONLY, citationSummary, citationsIn, findCitation, linkifyCitations, type Citation } from './citations'
 
 describe('linkifyCitations', () => {
   it('wraps bare citations in backticks so they render as chips', () => {
@@ -35,5 +35,18 @@ describe('citation lookup', () => {
     expect(findCitation('nope.py:1', citations)).toBeUndefined()
     expect(citationSummary(citations)).toEqual({ total: 3, supported: 2, unsupported: 1 })
     expect(citationSummary(undefined)).toEqual({ total: 0, supported: 0, unsupported: 0 })
+  })
+})
+
+describe('citationsIn', () => {
+  it('lists the citations written so far, once each, with file and line', () => {
+    const partial = 'Signs in `src/signer.py:237` and again src/signer.py:237, then calls lib/keys.ts:12-'
+    expect(citationsIn(partial)).toEqual([
+      { text: 'src/signer.py:237', filepath: 'src/signer.py', line: 237 },
+      { text: 'lib/keys.ts:12', filepath: 'lib/keys.ts', line: 12 },
+    ])
+    expect(citationsIn('See (`a/b.py:3`).')).toEqual([
+      { text: 'a/b.py:3', filepath: 'a/b.py', line: 3 },
+    ])
   })
 })

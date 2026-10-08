@@ -1,4 +1,6 @@
+import { ChevronRight, FileCode2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 interface TreeNode {
   name: string
@@ -40,18 +42,29 @@ function Branch({ node, depth, selected, onSelect, max }: {
   return (
     <li>
       <button
-        className={`tree-row ${active ? 'active' : ''}`}
-        style={{ paddingLeft: 8 + depth * 14 }}
+        className={cn(
+          'group flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-[0.8rem] transition-colors hover:bg-accent',
+          active && 'bg-thread-soft text-foreground',
+        )}
+        style={{ paddingLeft: 6 + depth * 14 }}
         onClick={() => {
           if (!node.isFile) setOpen((o) => !o)
           onSelect(active ? null : node.path)
         }}
         aria-expanded={node.isFile ? undefined : open}
+        aria-pressed={active}
       >
-        <span className="tree-icon" aria-hidden>{node.isFile ? '◆' : open ? '▾' : '▸'}</span>
-        <span className="tree-name">{node.name}</span>
-        <span className="tree-bar" aria-hidden><span style={{ width: `${(node.count / max) * 100}%` }} /></span>
-        <span className="tree-count">{node.count}</span>
+        {node.isFile ? (
+          <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        ) : (
+          <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-90')} aria-hidden />
+        )}
+        <span className={cn('min-w-0 flex-1 truncate', node.isFile ? 'font-mono text-[0.76rem]' : 'font-medium')}>{node.name}</span>
+        {/* Bar length: how many symbols this file or folder holds, relative to the largest. */}
+        <span aria-hidden className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-rule-soft">
+          <span className={cn('block h-full rounded-full bg-pencil/60', active && 'bg-thread')} style={{ width: `${(node.count / max) * 100}%` }} />
+        </span>
+        <span className="w-7 shrink-0 text-right text-[0.72rem] text-muted-foreground tabular-nums">{node.count}</span>
       </button>
       {!node.isFile && open && (
         <ul>
@@ -75,7 +88,7 @@ export default function FileTree({ filepaths, selected, onSelect }: {
   }, [filepaths])
   const max = Math.max(1, ...sorted(root).map((c) => c.count))
   return (
-    <ul className="file-tree">
+    <ul className="space-y-px">
       {sorted(root).map((c) => (
         <Branch key={c.path} node={c} depth={0} selected={selected} onSelect={onSelect} max={max} />
       ))}

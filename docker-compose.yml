@@ -24,8 +24,10 @@ services:
     <<: *backend
     container_name: git_rag_api
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Every port is published on this machine only (127.0.0.1): the API has no sign-in and the
+    # databases use development passwords, so nothing here should be reachable from the network.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
   worker:
     <<: *backend
@@ -37,8 +39,8 @@ services:
     image: redis/redis-stack:latest
     container_name: git_rag_redis
     ports:
-      - "6379:6379"
-      - "8001:8001"
+      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:8001:8001"
     environment:
       # Append-only file on a volume: the BM25 index, embedding cache and task queue
       # survive `docker compose down` (same as deploy/docker-compose.prod.yml).
@@ -56,8 +58,8 @@ services:
     image: qdrant/qdrant:latest
     container_name: git_rag_qdrant
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
     restart: unless-stopped
@@ -66,8 +68,8 @@ services:
     image: neo4j:5.18-community
     container_name: git_rag_neo4j
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
       - NEO4J_AUTH=neo4j/password123
       - NEO4J_PLUGINS=["apoc"]

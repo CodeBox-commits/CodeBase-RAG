@@ -1,20 +1,19 @@
 // A small isometric block of towers for empty states: the code city, before anything is built.
 
 const TOWERS = [
-  { x: 0, y: 0, h: 34, c: 'var(--cyan)' },
-  { x: 1, y: 0, h: 18, c: 'var(--lime)' },
-  { x: 0, y: 1, h: 22, c: 'var(--rose)' },
-  { x: 1, y: 1, h: 46, c: 'var(--lit)' },
-  { x: 2, y: 0, h: 12, c: 'var(--cyan)' },
-  { x: 2, y: 1, h: 26, c: 'var(--lime)' },
+  { x: 0, y: 0, h: 34, c: 'var(--kind-method)' },
+  { x: 1, y: 0, h: 18, c: 'var(--kind-function)' },
+  { x: 0, y: 1, h: 22, c: 'var(--kind-class)' },
+  { x: 1, y: 1, h: 46, c: 'var(--thread)' },
+  { x: 2, y: 0, h: 12, c: 'var(--kind-method)' },
+  { x: 2, y: 1, h: 26, c: 'var(--kind-function)' },
 ]
 
-export default function MiniCity({ small = false }: { small?: boolean }) {
-  const size = small ? 72 : 120
+export default function MiniCity({ className }: { className?: string }) {
   // Painter's order: back rows first.
   const order = [...TOWERS].sort((a, b) => a.x + a.y - (b.x + b.y))
   return (
-    <svg className="mini-city" width={size} height={size} viewBox="-60 -70 120 120" aria-hidden>
+    <svg viewBox="-60 -70 120 120" className={className} style={{ filter: 'drop-shadow(0 0 10px rgb(177 140 255 / 0.35))' }} aria-hidden>
       {order.map((t, i) => {
         const cx = (t.x - t.y) * 16
         const cy = (t.x + t.y) * 9

@@ -42,6 +42,9 @@ interface RepoContextValue {
   remove: (url: string) => Promise<void>
   chats: Record<string, Message[]>
   updateChat: (url: string, fn: (m: Message[]) => Message[]) => void
+  /** A symbol id (filepath::name) another page asked Explore to select, e.g. from the command menu. */
+  focusSymbol: string | null
+  setFocusSymbol: (id: string | null) => void
 }
 
 const RepoContext = createContext<RepoContextValue | null>(null)
@@ -53,6 +56,7 @@ export function repoName(url: string) {
 export function RepoProvider({ children }: { children: ReactNode }) {
   const [repos, setRepos] = useState<Repo[]>(() => load('repos', []))
   const [activeUrl, setActiveUrl] = useState<string | null>(() => load('active', null))
+  const [focusSymbol, setFocusSymbol] = useState<string | null>(null)
   const [chats, setChats] = useState<Record<string, Message[]>>(() => {
     // A reply still pending when the page closed will never complete; don't show it spinning forever.
     const saved = load<Record<string, Message[]>>('chats', {})
@@ -132,6 +136,8 @@ export function RepoProvider({ children }: { children: ReactNode }) {
         remove,
         chats,
         updateChat: (url, fn) => setChats((c) => ({ ...c, [url]: fn(c[url] ?? []) })),
+        focusSymbol,
+        setFocusSymbol,
       }}
     >
       {children}

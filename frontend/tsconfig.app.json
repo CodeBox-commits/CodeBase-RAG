@@ -16,6 +16,9 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* `@/` imports (shadcn/ui convention); mirrored in vite.config.ts */
+    "paths": { "@/*": ["./src/*"] },
+
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,

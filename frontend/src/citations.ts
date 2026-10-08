@@ -46,3 +46,18 @@ export function citationSummary(citations: Citation[] | undefined) {
   const supported = list.filter((c) => c.status === 'verified' || c.status === 'graph').length
   return { total: list.length, supported, unsupported: list.length - supported }
 }
+
+/** Citations written so far in a (possibly still streaming) answer, in order, without repeats. */
+export function citationsIn(markdown: string): { text: string; filepath: string; line: number }[] {
+  const seen = new Set<string>()
+  const out: { text: string; filepath: string; line: number }[] = []
+  // Unlike linkifying, citations already in backticks count here (models usually write them so).
+  for (const m of markdown.matchAll(new RegExp(`(?<![\\w/])${BODY}`, 'g'))) {
+    const text = m[0]
+    if (seen.has(text)) continue
+    seen.add(text)
+    const [, filepath, line] = /^(.*):(\d+)/.exec(text) ?? []
+    if (filepath) out.push({ text, filepath, line: Number(line) })
+  }
+  return out
+}

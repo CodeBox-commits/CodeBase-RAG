@@ -1,0 +1,266 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+/*
+ * A neon city at night: a near-black ground with only a breath of violet, cool white text, and
+ * violet reserved for what is lit (selected, running, a call being followed). Finished things
+ * go quiet: they're neutral, not violet. Symbol kinds glow lime (functions),
+ * cyan (methods) and rose (classes). The token names below are the semantic roles the
+ * components use; three.js reads the same variables (palette.ts).
+ *
+ *   thread     lit: a link in the graph, selection, the running step
+ *   highlight  the exact cited line
+ *   check      something to check (unverified citations, errors, deleting)
+ *   verified   checked against the code the model saw
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --film: #0e0d14;        /* ground: near-black, a breath of violet */
+  --sheet: #16151f;       /* raised surfaces */
+  --sheet-2: #1f1d2b;
+  --graphite: #edecf3;    /* text */
+  --pencil: #a5a1b8;      /* secondary text */
+  --rule: #34314a;
+  --rule-soft: #222030;
+  --thread: #b18cff;      /* lit */
+  --thread-soft: rgb(177 140 255 / 0.16);
+  --highlight: #ffc96b;
+  --highlight-ink: #160936;
+  --check: #ff7a8a;
+  --verified: #a3ee7f;
+  --lit-ink: #160936;
+
+  --kind-function: #a3ee7f;
+  --kind-method: #5fd6f2;
+  --kind-class: #ff7aa8;
+
+  --background: var(--film);
+  --foreground: var(--graphite);
+  --card: var(--sheet);
+  --card-foreground: var(--graphite);
+  --popover: #1a1925;
+  --popover-foreground: var(--graphite);
+  --primary: var(--thread);
+  --primary-foreground: var(--lit-ink);
+  --secondary: var(--sheet-2);
+  --secondary-foreground: var(--graphite);
+  --muted: var(--sheet-2);
+  --muted-foreground: var(--pencil);
+  --accent: #282536;
+  --accent-foreground: var(--graphite);
+  --destructive: var(--check);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--thread);
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --font-display: 'Archivo Variable', system-ui, sans-serif;
+  --font-sans: 'Archivo Variable', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-film: var(--film);
+  --color-sheet: var(--sheet);
+  --color-sheet-2: var(--sheet-2);
+  --color-graphite: var(--graphite);
+  --color-pencil: var(--pencil);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+  --color-thread: var(--thread);
+  --color-thread-soft: var(--thread-soft);
+  --color-highlight: var(--highlight);
+  --color-highlight-ink: var(--highlight-ink);
+  --color-check: var(--check);
+  --color-verified: var(--verified);
+  --color-kind-function: var(--kind-function);
+  --color-kind-method: var(--kind-method);
+  --color-kind-class: var(--kind-class);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Type scale (modular, ~1.25 at text sizes, wider at display sizes) */
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1.1rem;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.35rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.6rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/60;
+  }
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-base antialiased;
+    }
+  ::selection {
+    background: var(--highlight);
+    color: var(--highlight-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--thread);
+    outline-offset: 2px;
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  code, kbd, pre {
+    font-family: var(--font-mono);
+  }
+}
+
+/* A faint street grid behind full-bleed scenes, fading out at the edges. */
+@utility drafting-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--rule) 40%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--rule) 40%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@utility display {
+  font-family: var(--font-display);
+  font-stretch: 118%;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.98;
+}
+
+/* Answers: readable prose with code and citations inline. */
+@layer components {
+  .prose-answer {
+    @apply text-[0.98rem] leading-[1.7] text-foreground;
+    max-width: 68ch;
+  }
+  .prose-answer > :first-child { margin-top: 0; }
+  .prose-answer > :last-child { margin-bottom: 0; }
+  .prose-answer p { margin: 0.6em 0; }
+  .prose-answer ul, .prose-answer ol { margin: 0.6em 0; padding-left: 1.3em; }
+  .prose-answer ul { list-style: disc; }
+  .prose-answer ol { list-style: decimal; }
+  .prose-answer li { margin: 0.3em 0; }
+  .prose-answer li::marker { color: var(--pencil); }
+  .prose-answer strong { font-weight: 650; }
+  .prose-answer h1, .prose-answer h2, .prose-answer h3 { font-weight: 650; margin: 1.1em 0 0.4em; font-size: 1.02em; }
+  .prose-answer :not(pre) > code {
+    @apply rounded-sm px-1 py-px text-[0.84em];
+    background: var(--sheet-2);
+    border: 1px solid var(--rule-soft);
+  }
+  .prose-answer pre {
+    @apply my-3 overflow-x-auto rounded-md border p-3 text-[0.82rem] leading-relaxed;
+    background: var(--sheet-2);
+  }
+  .prose-answer table { @apply my-3 border-collapse text-sm; }
+  .prose-answer th, .prose-answer td { @apply border px-2 py-1 text-left; }
+  .prose-answer a { color: var(--thread); text-decoration: underline; text-underline-offset: 2px; }
+}
+
+/* Shiki (css-variables theme): token colours from the neon palette. */
+:root {
+  --shiki-foreground: #dddbe7;
+  --shiki-background: transparent;
+  --shiki-token-constant: #ffc96b;
+  --shiki-token-string: #a3ee7f;
+  --shiki-token-comment: #8a85a0;
+  --shiki-token-keyword: #b18cff;
+  --shiki-token-parameter: #ffb3cd;
+  --shiki-token-function: #5fd6f2;
+  --shiki-token-string-expression: #a3ee7f;
+  --shiki-token-punctuation: #a5a1b8;
+  --shiki-token-link: #b18cff;
+}
+
+/* Lit things glow: used for the running step, the selected answer and primary actions. */
+@utility glow {
+  box-shadow: 0 0 0 1px rgb(177 140 255 / 0.5), 0 0 18px rgb(177 140 255 / 0.35);
+}
+
+/* Indeterminate progress: a bar sliding across its track. */
+@keyframes slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* The live pipeline on the Ask page: packets on the wire, a reading beam, bouncing vectors. */
+@keyframes wire-flow {
+  from { background-position: 0 0; }
+  to { background-position: 36px 0; }
+}
+@keyframes beam-x {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(520%); }
+}
+@keyframes beam-y {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(900%); }
+}
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+@keyframes word-lit {
+  0%, 100% { color: var(--pencil); text-shadow: none; }
+  45% { color: var(--graphite); text-shadow: 0 0 12px var(--thread); }
+}
+@keyframes ping-ring {
+  from { transform: scale(0.6); opacity: 0.9; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+@utility wire-live {
+  background-image: repeating-linear-gradient(90deg, var(--thread) 0 8px, transparent 8px 18px);
+  background-size: 36px 100%;
+  animation: wire-flow 0.6s linear infinite;
+  filter: drop-shadow(0 0 4px var(--thread));
+}
+@utility wire-done {
+  background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--pencil) 55%, transparent) 0 10px, color-mix(in srgb, var(--pencil) 25%, transparent) 10px 18px);
+  background-size: 36px 100%;
+  animation: wire-flow 1.6s linear infinite;
+}

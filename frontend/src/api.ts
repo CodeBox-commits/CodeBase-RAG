@@ -20,6 +20,9 @@ export interface IndexResult {
 
 export interface IngestProgress {
   step?: string
+  /** full | incremental, from the worker */
+  mode?: string
+  files_changed?: number
   files_total?: number
   files_done?: number
   chunks?: number

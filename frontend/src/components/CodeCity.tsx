@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { Reflector } from 'three/addons/objects/Reflector.js'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
-import { CITY, EDGE_COLORS, KIND_COLORS } from '../palette'
+import { cn } from '@/lib/utils'
+import { useModelPalette } from '../palette'
 
 /**
- * A repository as a neon city. Each file is a plot, each function/class/method a glass tower
- * whose height follows its line count, with edges and windows lit in its kind's colour.
- * Call edges are arcs between rooftops. Selecting a tower lights it and its calls in violet,
- * raises a beam from its roof and dims the rest of the city.
+ * A repository as a neon city at night. Each file is a plot of dark glass, each function,
+ * method or class a glass tower as tall as its code is long, with edges and windows lit in
+ * its kind's colour. Calls are arcs between rooftops; the streets are wet, so the city is
+ * reflected in them. Selecting a tower lights it and its calls, flies the camera to it,
+ * raises a beam from its roof and dims the rest; in impact mode the affected towers pulse in
+ * waves, one hop at a time.
  */
 
 export interface CityNode {
@@ -27,21 +31,37 @@ interface Props {
   edges: CityEdge[]
   selected?: string | null
   highlight?: Set<string> | null
+  /** Symbol id → hops from the changed symbol: those towers pulse outward in waves. */
+  pulse?: Map<string, number> | null
   onSelect?: (id: string | null) => void
-  /** Drag to orbit and wheel to zoom. Off for the hero, where it would trap page scroll. */
+  /** Drag to orbit and wheel to zoom. Off for the hero, where the mouse tilts it instead. */
   controls?: boolean
-  /** Cycles a lit "query" through the city when nothing is selected. */
+  /** Passes the light from one well-connected tower to the next while nothing is selected. */
   tour?: boolean
-  /** Shifts the city sideways in frame (fraction of the width), to leave room for overlaid copy. */
+  /** Shifts the city sideways in frame (fraction of the width), to leave room for copy. */
   offsetX?: number
+  /** Multiplies the framing distance: >1 shows more margin around the city. */
+  framing?: number
+  /** Floats the biggest folders' names above their part of the city. */
+  districts?: boolean
   className?: string
 }
 
 interface Tower { node: CityNode; x: number; z: number; h: number; w: number }
+interface District { name: string; x: number; z: number; count: number }
+
+const CITY = {
+  body: 0x15141e, // tower glass, before its neon edges and windows
+  plot: 0x16151f,
+  plotEdge: 0x3e3a55,
+  grid: 0x1c1b27,
+  gridMajor: 0x2e2b3f,
+  horizon: 0x2a1f4a,
+}
 
 const dirname = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '')
 
-function layoutCity(nodes: CityNode[]) {
+export function layoutCity(nodes: CityNode[]) {
   const byFile = new Map<string, CityNode[]>()
   nodes.forEach((n) => {
     const f = n.filepath ?? '(unknown)'
@@ -59,21 +79,19 @@ function layoutCity(nodes: CityNode[]) {
   const area = blocks.reduce((s, b) => s + (b.size + 1) ** 2, 0)
   const maxW = Math.max(Math.sqrt(area) * 1.15, 6)
   const towers: Tower[] = []
-  const plots: { x: number; z: number; size: number }[] = []
+  const plots: { x: number; z: number; size: number; file: string; count: number }[] = []
   let x = 0, z = 0, rowH = 0, prevDir: string | null = null
   blocks.forEach((b) => {
     const dir = dirname(b.file)
     if (prevDir !== null && dir !== prevDir) x += 1.2
     if (x + b.size > maxW && x > 0) { x = 0; z += rowH + 1; rowH = 0 }
-    plots.push({ x: x + b.size / 2, z: z + b.size / 2, size: b.size })
+    plots.push({ x: x + b.size / 2, z: z + b.size / 2, size: b.size, file: b.file, count: b.items.length })
     b.items.forEach((node, i) => {
-      const cx = x + 0.75 + (i % b.n)
-      const cz = z + 0.75 + Math.floor(i / b.n)
       const lines = Math.max(node.lines ?? 6, 1)
       towers.push({
         node,
-        x: cx,
-        z: cz,
+        x: x + 0.75 + (i % b.n),
+        z: z + 0.75 + Math.floor(i / b.n),
         h: Math.min(0.35 + Math.sqrt(lines) * 0.42, 9),
         w: node.kind === 'class' ? 0.82 : node.kind === 'method' ? 0.58 : 0.66,
       })
@@ -86,7 +104,26 @@ function layoutCity(nodes: CityNode[]) {
   const depth = Math.max(...plots.map((p) => p.z + p.size / 2), 1)
   towers.forEach((t) => { t.x -= width / 2; t.z -= depth / 2 })
   plots.forEach((p) => { p.x -= width / 2; p.z -= depth / 2 })
-  return { towers, plots, radius: Math.hypot(width, depth) / 2 }
+
+  // Districts: folders one level below whatever every file shares, weighted by symbols.
+  const parts = files.map((f) => f.split('/'))
+  let common = 0
+  while (parts.length && parts.every((p) => p.length > common + 1 && p[common] === parts[0][common])) common++
+  const groups = new Map<string, { sx: number; sz: number; count: number }>()
+  plots.forEach((p) => {
+    const segs = p.file.split('/')
+    const key = segs.length > common + 1 ? segs.slice(0, common + 1).join('/') : '(top level)'
+    const g = groups.get(key) ?? { sx: 0, sz: 0, count: 0 }
+    g.sx += p.x * p.count; g.sz += p.z * p.count; g.count += p.count
+    groups.set(key, g)
+  })
+  const districts: District[] = [...groups.entries()]
+    .filter(([, g]) => g.count > 0)
+    .map(([name, g]) => ({ name: name.split('/').pop() ?? name, x: g.sx / g.count, z: g.sz / g.count, count: g.count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8)
+
+  return { towers, plots, districts, radius: Math.hypot(width, depth) / 2 }
 }
 
 /** A point on the arc from rooftop a to rooftop b; arcs rise with the distance they span. */
@@ -101,6 +138,8 @@ function arcPoint(a: Tower, b: Tower, t: number, out: THREE.Vector3) {
 }
 
 const ARC_SEGMENTS = 16
+const MAX_LIT = 80
+const TRAFFIC = 56
 
 // Glass towers: a dark body with neon edges, a lit roof and a grid of windows, some on.
 // Edge and window sizes are in world units, so thin and tall towers read the same.
@@ -147,6 +186,8 @@ const TOWER_FRAG = /* glsl */ `
 
     vec3 col = uBody;
     if (n.y < 0.5) {
+      // Faces turned away from the moonlight are darker, so towers read as volumes.
+      col *= (vNormal.x > 0.5 || vNormal.z < -0.5) ? 0.75 : 1.0;
       vec2 cellSize = vec2(0.15, 0.26);
       vec2 cell = floor(uv / cellSize);
       vec2 f = fract(uv / cellSize);
@@ -156,9 +197,12 @@ const TOWER_FRAG = /* glsl */ `
       float margin = step(0.07, d.x) * step(0.1, d.y);
       col += vColor * win * on * flicker * margin * 0.5;
       // A soft glow pooling at the foot of every tower.
-      col += vColor * 0.1 * (1.0 - smoothstep(0.0, 1.0, uv.y));
+      col += vColor * 0.12 * (1.0 - smoothstep(0.0, 1.0, uv.y));
+      // A thin band of light sweeping up the facade now and then.
+      float band = smoothstep(0.05, 0.0, abs(fract(uv.y * 0.08 - uTime * 0.05 + vSeed * 0.37) - 0.5));
+      col += vColor * band * 0.25;
     } else {
-      col += vColor * 0.32;
+      col += vColor * 0.34;
     }
     col = mix(col, vColor * 1.3, edge);
     // Far towers glow less, so a large city reads as a skyline rather than a haze.
@@ -167,18 +211,76 @@ const TOWER_FRAG = /* glsl */ `
     gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
   }`
 
+// Night sky: a violet glow on the horizon, fading to the ground colour overhead.
+const SKY_VERT = /* glsl */ `
+  varying vec3 vDir;
+  void main() {
+    vDir = normalize(position);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }`
+const SKY_FRAG = /* glsl */ `
+  uniform vec3 uTop;
+  uniform vec3 uHorizon;
+  varying vec3 vDir;
+  void main() {
+    // Only above the horizon: below it the sky must match the ground, or the street's edge shows.
+    float glow = vDir.y >= 0.0 ? exp(-vDir.y * 6.0) : exp(vDir.y * 60.0);
+    gl_FragColor = vec4(mix(uTop, uHorizon, glow * 0.85), 1.0);
+  }`
+
+function glowTexture() {
+  const c = document.createElement('canvas')
+  c.width = c.height = 64
+  const ctx = c.getContext('2d')!
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.3, 'rgba(255,255,255,0.8)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 64, 64)
+  return new THREE.CanvasTexture(c)
+}
+
+/**
+ * Fades the reflective street into the night. Clear inside `inner`, solid ground colour from
+ * `outer` (both as fractions of the plane's half-size), so the mirror's edge never shows.
+ */
+function vignetteTexture(color: number, inner: number, outer: number) {
+  const c = document.createElement('canvas')
+  c.width = c.height = 256
+  const ctx = c.getContext('2d')!
+  const col = new THREE.Color(color)
+  const rgb = `${Math.round(col.r * 255)}, ${Math.round(col.g * 255)}, ${Math.round(col.b * 255)}`
+  const g = ctx.createRadialGradient(128, 128, 128 * inner, 128, 128, 128 * outer)
+  g.addColorStop(0, `rgba(${rgb}, 0)`)
+  g.addColorStop(0.5, `rgba(${rgb}, 0.55)`)
+  g.addColorStop(1, `rgba(${rgb}, 1)`)
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 256, 256)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
 export default function CodeCity({
-  nodes, edges, selected = null, highlight = null, onSelect, controls = true, tour = false, offsetX = 0, className,
+  nodes, edges, selected = null, highlight = null, pulse = null, onSelect, controls = true, tour = false,
+  offsetX = 0, framing = 1, districts = false, className,
 }: Props) {
+  const pal = useModelPalette()
   const mountRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLDivElement>(null)
-  const apiRef = useRef<{ focus: (sel: string | null, hl: Set<string> | null) => void } | null>(null)
+  const districtRefs = useRef<(HTMLDivElement | null)[]>([])
+  const apiRef = useRef<{ focus: (sel: string | null, hl: Set<string> | null) => void; reframe: () => void; repaint: () => void } | null>(null)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
   const [hover, setHover] = useState<CityNode | null>(null)
-  // The tour must stand down while the user has something selected.
+  const [districtList, setDistrictList] = useState<District[]>([])
   const selectedRef = useRef(selected)
   selectedRef.current = selected
+  const offsetRef = useRef(offsetX)
+  offsetRef.current = offsetX
+  const pulseRef = useRef(pulse)
+  pulseRef.current = pulse
 
   useEffect(() => {
     const mount = mountRef.current
@@ -190,19 +292,20 @@ export default function CodeCity({
     mount.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(CITY.ground)
-    const fog = new THREE.Fog(CITY.ground, 40, 140)
+    scene.background = new THREE.Color(pal.ground)
+    const fog = new THREE.Fog(pal.ground, 40, 140)
     scene.fog = fog
-    const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 600)
+    const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 2000)
     const disposables: { dispose(): void }[] = []
     const keep = <T extends { dispose(): void }>(x: T) => (disposables.push(x), x)
 
-    // Bloom turns the neon edges, windows and arcs into light.
+    const { towers, plots, districts: districtData, radius } = layoutCity(nodes)
+    setDistrictList(districts ? districtData : [])
+
+    // Bloom turns the neon edges, windows, arcs and their reflections into light.
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    const { towers, plots, radius } = layoutCity(nodes)
-    // Big cities have far more lit pixels, so they get less bloom.
-    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.9 * THREE.MathUtils.clamp(16 / radius, 0.45, 1), 0.5, 0.3)
+    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.95 * THREE.MathUtils.clamp(16 / radius, 0.45, 1), 0.55, 0.28)
     composer.addPass(bloom)
     composer.addPass(new OutputPass())
 
@@ -213,17 +316,58 @@ export default function CodeCity({
     // Membership edges are implied by the plots; only calls and inheritance are drawn as arcs.
     const arcs = links.filter((l) => l.type !== 'HAS_METHOD')
 
-    // --- ground: a neon street grid, and one outlined plot per file --------------------
-    const grid = new THREE.GridHelper(Math.ceil(radius * 4), Math.ceil(radius * 4), CITY.gridMajor, CITY.grid)
-    grid.position.y = -0.02
-    keep(grid.geometry); keep(grid.material as THREE.Material)
+    // --- sky --------------------------------------------------------------------------------
+    const skyMat = keep(new THREE.ShaderMaterial({
+      vertexShader: SKY_VERT,
+      fragmentShader: SKY_FRAG,
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: { uTop: { value: new THREE.Color(pal.ground) }, uHorizon: { value: new THREE.Color(CITY.horizon) } },
+    }))
+    const sky = new THREE.Mesh(keep(new THREE.SphereGeometry(radius * 14 + 300, 32, 16)), skyMat)
+    scene.add(sky)
+
+    // --- wet streets: a real mirror under the city, fading into the night at its rim --------
+    const streetSize = radius * 3.2 + 14
+    const pr = renderer.getPixelRatio()
+    const mirror = new Reflector(keep(new THREE.PlaneGeometry(streetSize, streetSize)), {
+      textureWidth: 512,
+      textureHeight: 512,
+      color: 0x34313f,
+      clipBias: 0.003,
+    })
+    mirror.rotation.x = -Math.PI / 2
+    mirror.position.y = -0.03
+    scene.add(mirror)
+    // Twice the street's size: clear around the city, solid ground before the mirror ends.
+    const vignetteSize = streetSize * 2
+    const vignette = new THREE.Mesh(
+      keep(new THREE.PlaneGeometry(vignetteSize, vignetteSize)),
+      keep(new THREE.MeshBasicMaterial({
+        map: keep(vignetteTexture(pal.ground, (radius * 1.15) / (vignetteSize / 2), (streetSize * 0.46) / (vignetteSize / 2))),
+        transparent: true,
+        depthWrite: false,
+        fog: false,
+      })),
+    )
+    vignette.rotation.x = -Math.PI / 2
+    vignette.position.y = -0.02
+    scene.add(vignette)
+
+    const grid = new THREE.GridHelper(Math.ceil(streetSize), Math.ceil(streetSize), CITY.gridMajor, CITY.grid)
+    grid.position.y = -0.01
+    const gridMat = grid.material as THREE.LineBasicMaterial
+    gridMat.transparent = true
+    gridMat.opacity = 0.5
+    keep(grid.geometry); keep(gridMat)
     scene.add(grid)
 
-    const slabGeo = keep(new THREE.BoxGeometry(1, 0.08, 1))
-    const slabMat = keep(new THREE.MeshBasicMaterial({ color: CITY.plot }))
-    const slabs = new THREE.InstancedMesh(slabGeo, slabMat, plots.length)
+    // File plots: dark glass, so the reflections still show through.
+    const slabMat = keep(new THREE.MeshBasicMaterial({ color: CITY.plot, transparent: true, opacity: 0.45 }))
+    const slabs = new THREE.InstancedMesh(keep(new THREE.BoxGeometry(1, 0.08, 1)), slabMat, plots.length)
     const m = new THREE.Matrix4()
-    plots.forEach((p, i) => slabs.setMatrixAt(i, m.compose(new THREE.Vector3(p.x, 0.04, p.z), new THREE.Quaternion(), new THREE.Vector3(p.size, 1, p.size))))
+    const q = new THREE.Quaternion()
+    plots.forEach((p, i) => slabs.setMatrixAt(i, m.compose(new THREE.Vector3(p.x, 0.04, p.z), q, new THREE.Vector3(p.size, 1, p.size))))
     scene.add(slabs)
 
     const outline = new Float32Array(plots.length * 24)
@@ -237,10 +381,10 @@ export default function CodeCity({
     })
     const outlineGeo = keep(new THREE.BufferGeometry())
     outlineGeo.setAttribute('position', new THREE.BufferAttribute(outline, 3))
-    const outlineMat = keep(new THREE.LineBasicMaterial({ color: CITY.plotEdge, transparent: true, opacity: 0.8 }))
+    const outlineMat = keep(new THREE.LineBasicMaterial({ color: CITY.plotEdge, transparent: true, opacity: 0.85 }))
     scene.add(new THREE.LineSegments(outlineGeo, outlineMat))
 
-    // --- towers ----------------------------------------------------------------------
+    // --- towers -----------------------------------------------------------------------------
     const towerGeo = keep(new THREE.BoxGeometry(1, 1, 1))
     towerGeo.translate(0, 0.5, 0)
     const towerMat = keep(new THREE.ShaderMaterial({
@@ -248,31 +392,36 @@ export default function CodeCity({
       fragmentShader: TOWER_FRAG,
       uniforms: {
         uBody: { value: new THREE.Color(CITY.body) },
-        uFog: { value: new THREE.Color(CITY.ground) },
+        uFog: { value: new THREE.Color(pal.ground) },
         uNear: { value: 40 },
         uFar: { value: 140 },
         uTime: { value: 0 },
       },
     }))
     const city = new THREE.InstancedMesh(towerGeo, towerMat, towers.length)
-    const base = towers.map((t) => new THREE.Color(KIND_COLORS[t.node.kind] ?? CITY.unknown))
+    const base = towers.map((t) => new THREE.Color(pal.kinds[t.node.kind] ?? pal.pencil))
+    // tint: each tower's colour after selection and highlight; hover and pulses multiply on top.
+    const tint = base.map((c) => c.clone())
     const rise = new Float32Array(towers.length) // 0..1 build-up on first appearance
-    const setTower = (i: number, grow: number) => {
+    const lift = new Float32Array(towers.length) // 0..1 hover lift
+    const setTower = (i: number) => {
       const t = towers[i]
-      m.compose(new THREE.Vector3(t.x, 0.08, t.z), new THREE.Quaternion(), new THREE.Vector3(t.w, Math.max(t.h * grow, 0.001), t.w))
+      const g = 1 - (1 - rise[i]) ** 3
+      m.compose(new THREE.Vector3(t.x, 0.08, t.z), q, new THREE.Vector3(t.w, Math.max(t.h * g * (1 + lift[i] * 0.1), 0.001), t.w))
       city.setMatrixAt(i, m)
     }
-    towers.forEach((_, i) => { rise[i] = reduceMotion ? 1 : 0; setTower(i, rise[i]); city.setColorAt(i, base[i]) })
+    towers.forEach((_, i) => { rise[i] = reduceMotion ? 1 : 0; setTower(i); city.setColorAt(i, base[i]) })
     scene.add(city)
 
-    // --- arcs: a faint layer for every call, and lit tubes for the focused tower ---------
+    // --- arcs: a faint layer for every call, and lit tubes for the focused tower -------------
     const faintPos = new Float32Array(arcs.length * ARC_SEGMENTS * 6)
     const faintCol = new Float32Array(arcs.length * ARC_SEGMENTS * 6)
     const faintGeo = keep(new THREE.BufferGeometry())
     faintGeo.setAttribute('position', new THREE.BufferAttribute(faintPos, 3))
     faintGeo.setAttribute('color', new THREE.BufferAttribute(faintCol, 3))
+    const faintBase = THREE.MathUtils.clamp(0.32 * Math.sqrt(160 / Math.max(arcs.length, 1)), 0.1, 0.32)
     const faintMat = keep(new THREE.LineBasicMaterial({
-      vertexColors: true, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexColors: true, transparent: true, opacity: faintBase, depthWrite: false, blending: THREE.AdditiveBlending,
     }))
     scene.add(new THREE.LineSegments(faintGeo, faintMat))
 
@@ -280,7 +429,7 @@ export default function CodeCity({
     const col = new THREE.Color()
     const paintFaint = (only: Set<number> | null) => {
       arcs.forEach((l, k) => {
-        col.setHex(EDGE_COLORS[l.type] ?? CITY.unknown)
+        col.setHex(pal.edges[l.type] ?? pal.thread)
         if (only && !(only.has(l.a) && only.has(l.b))) col.multiplyScalar(0.12)
         for (let s = 0; s < ARC_SEGMENTS; s++) {
           const o = (k * ARC_SEGMENTS + s) * 6
@@ -295,14 +444,12 @@ export default function CodeCity({
     }
     paintFaint(null)
 
-    // Lit arcs are real tubes (WebGL lines are always 1px), rebuilt whenever the focus moves.
-    // Colours above 1.0 push them past the bloom threshold.
-    const MAX_LIT = 80
+    // Lit arcs are real tubes (WebGL lines are always 1px); colours above 1.0 pass the bloom threshold.
     const litGroup = new THREE.Group()
     scene.add(litGroup)
     const litMats = {
-      CALLS: keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(CITY.lit).multiplyScalar(1.8) })),
-      INHERITS: keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(EDGE_COLORS.INHERITS).multiplyScalar(1.6) })),
+      CALLS: keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.thread).multiplyScalar(1.8) })),
+      INHERITS: keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(pal.edges.INHERITS).multiplyScalar(1.6) })),
     }
     const clearLit = () => {
       litGroup.children.forEach((c) => (c as THREE.Mesh).geometry.dispose())
@@ -316,18 +463,33 @@ export default function CodeCity({
       return new THREE.TubeGeometry(curve, 40, Math.max(0.06, radius * 0.003), 6, false)
     }
 
-    // Pulses: one bead per lit arc, travelling caller → callee.
-    const beadGeo = keep(new THREE.SphereGeometry(0.18, 12, 10))
+    // Beads: one per lit arc, travelling caller → callee.
     const beadMat = keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff).multiplyScalar(2.2) }))
-    const beads = new THREE.InstancedMesh(beadGeo, beadMat, MAX_LIT)
+    const beads = new THREE.InstancedMesh(keep(new THREE.SphereGeometry(0.18, 12, 10)), beadMat, MAX_LIT)
     beads.count = 0
     scene.add(beads)
+
+    // Traffic: packets running along random calls while nothing is selected, so the city is alive.
+    const glow = keep(glowTexture())
+    const traffic = Array.from({ length: arcs.length ? TRAFFIC : 0 }, () => ({
+      arc: Math.floor(Math.random() * arcs.length), t: Math.random(), speed: 0.25 + Math.random() * 0.35,
+    }))
+    const trafficPos = new Float32Array(traffic.length * 3)
+    const trafficGeo = keep(new THREE.BufferGeometry())
+    trafficGeo.setAttribute('position', new THREE.BufferAttribute(trafficPos, 3))
+    const trafficMat = keep(new THREE.PointsMaterial({
+      size: Math.max(0.5, radius * 0.024), map: glow, color: 0xe6dcff, transparent: true, opacity: 0.9,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    const trafficPoints = new THREE.Points(trafficGeo, trafficMat)
+    trafficPoints.visible = traffic.length > 0 && !reduceMotion
+    scene.add(trafficPoints)
 
     // The selected tower gets a beam of light from its roof and a scan ring on the ground.
     const beamGeo = keep(new THREE.CylinderGeometry(0.05, 0.05, 1, 8, 1, true))
     beamGeo.translate(0, 0.5, 0)
     const beamMat = keep(new THREE.MeshBasicMaterial({
-      color: new THREE.Color(CITY.lit).multiplyScalar(1.4), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false,
+      color: new THREE.Color(pal.thread).multiplyScalar(1.4), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false,
     }))
     const beam = new THREE.Mesh(beamGeo, beamMat)
     beam.visible = false
@@ -335,19 +497,37 @@ export default function CodeCity({
     const ringGeo = keep(new THREE.RingGeometry(0.92, 1, 64))
     ringGeo.rotateX(-Math.PI / 2)
     const ringMat = keep(new THREE.MeshBasicMaterial({
-      color: new THREE.Color(CITY.lit).multiplyScalar(1.5), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+      color: new THREE.Color(pal.thread).multiplyScalar(1.5), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
     }))
     const ring = new THREE.Mesh(ringGeo, ringMat)
     ring.position.y = 0.12
     ring.visible = false
     scene.add(ring)
 
-    // --- focus ---------------------------------------------------------------------
+    // --- colour: selection and highlight set the tint; hover and impact pulses multiply it ---
+    const clock = new THREE.Clock()
+    let hoverIdx = -1
+    const paintTowers = () => {
+      const pulses = pulseRef.current
+      const t = clock.elapsedTime
+      towers.forEach((tw, i) => {
+        col.copy(tint[i])
+        const hops = pulses?.get(tw.node.id)
+        if (hops !== undefined && !reduceMotion) {
+          // A wave leaving the changed symbol and reaching each hop in turn.
+          const phase = (((t * 0.9 - hops * 0.42) % 1.8) + 1.8) % 1.8
+          col.multiplyScalar(1 + 1.4 * Math.exp(-((phase * 5) ** 2)))
+        }
+        if (i === hoverIdx) col.multiplyScalar(1.5)
+        city.setColorAt(i, col)
+      })
+      city.instanceColor!.needsUpdate = true
+    }
+
     let lit: { a: number; b: number; type: string }[] = []
     let litGrow = 1
     let focusIdx = -1
     let focusAt = 0
-    const clock = new THREE.Clock()
     const focus = (sel: string | null, hl: Set<string> | null) => {
       focusIdx = sel ? indexOf.get(sel) ?? -1 : -1
       focusAt = clock.elapsedTime
@@ -363,23 +543,23 @@ export default function CodeCity({
         })
       }
       const hlIdx = hl && hl.size ? new Set([...hl].map((id) => indexOf.get(id)).filter((i): i is number => i !== undefined)) : null
-      const keepSet = focusIdx >= 0 ? near : hlIdx
-      const dim = focusIdx >= 0 && tour ? 0.4 : 0.18
+      const keepSet = focusIdx >= 0 ? (hlIdx ? new Set([...near, ...hlIdx]) : near) : hlIdx
+      const dim = focusIdx >= 0 && tour ? 0.4 : 0.16
       towers.forEach((_, i) => {
-        col.copy(base[i])
-        if (i === focusIdx) col.setHex(CITY.lit).multiplyScalar(1.5)
-        else if (keepSet && !keepSet.has(i)) col.multiplyScalar(dim)
-        city.setColorAt(i, col)
+        tint[i].copy(base[i])
+        if (i === focusIdx) tint[i].setHex(pal.thread).multiplyScalar(1.5)
+        else if (keepSet && !keepSet.has(i)) tint[i].multiplyScalar(dim)
       })
-      city.instanceColor!.needsUpdate = true
+      paintTowers()
       paintFaint(keepSet)
-      faintMat.opacity = focusIdx >= 0 ? 0.18 : 0.3
+      faintMat.opacity = focusIdx >= 0 ? faintBase * 0.6 : faintBase
       clearLit()
       lit.forEach((l) => {
         litGroup.add(new THREE.Mesh(tubeFor(towers[l.a], towers[l.b]), l.type === 'INHERITS' ? litMats.INHERITS : litMats.CALLS))
       })
       litGrow = reduceMotion ? 1 : 0
       beam.visible = ring.visible = focusIdx >= 0
+      trafficPoints.visible = traffic.length > 0 && !reduceMotion && focusIdx < 0
       if (focusIdx >= 0) {
         const tw = towers[focusIdx]
         beam.position.set(tw.x, tw.h, tw.z)
@@ -387,18 +567,21 @@ export default function CodeCity({
         ring.position.z = tw.z
       }
     }
-    apiRef.current = { focus }
 
-    // --- camera ------------------------------------------------------------------------
+    // --- camera ---------------------------------------------------------------------------------
     let yaw = 0.75, pitch = 0.72
     // Distance that fits the whole city in the narrower of the two fields of view.
     const fitDist = () => {
       const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
       const tanH = tanV * camera.aspect
-      return (radius * 1.08) / Math.min(tanV * 1.3, tanH) + 6
+      return ((radius * 1.08) / Math.min(tanV * 1.3, tanH) + 6) * framing
     }
     let dist = 60, targetDist = dist, userZoomed = false
-    const minD = Math.max(radius * 0.6, 8), maxD = radius * 8 + 60
+    const minD = Math.max(radius * 0.5, 8), maxD = radius * 8 + 60
+    // The orbit centre glides to the selected tower and back (camera fly-to).
+    const look = new THREE.Vector3(0, 1.5, 0)
+    const lookTarget = new THREE.Vector3(0, 1.5, 0)
+    let parallaxX = 0, parallaxY = 0, tiltX = 0, tiltY = 0
     let dragging = false, moved = false, lastX = 0, lastY = 0, idleSince = performance.now()
     const el = renderer.domElement
     const raycaster = new THREE.Raycaster()
@@ -410,7 +593,6 @@ export default function CodeCity({
       const hit = raycaster.intersectObject(city)[0]
       return hit?.instanceId !== undefined ? hit.instanceId : -1
     }
-    let hoverIdx = -1
     const onMove = (e: PointerEvent) => {
       if (dragging) {
         const dx = e.clientX - lastX, dy = e.clientY - lastY
@@ -421,10 +603,14 @@ export default function CodeCity({
         return
       }
       const i = pick(e)
-      if (i !== hoverIdx) { hoverIdx = i; setHover(i >= 0 ? towers[i].node : null) }
+      if (i !== hoverIdx) {
+        hoverIdx = i
+        setHover(i >= 0 ? towers[i].node : null)
+        paintTowers()
+      }
       el.style.cursor = i >= 0 && onSelectRef.current ? 'pointer' : controls ? 'grab' : 'default'
     }
-    const onLeave = () => { hoverIdx = -1; setHover(null) }
+    const onLeave = () => { hoverIdx = -1; setHover(null); paintTowers() }
     const onDown = (e: PointerEvent) => {
       if (!controls) return
       dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY
@@ -439,31 +625,38 @@ export default function CodeCity({
       userZoomed = true
       targetDist = Math.max(minD, Math.min(maxD, targetDist * (1 + Math.sign(e.deltaY) * 0.1)))
     }
+    // The hero has no controls: the mouse anywhere on the page tilts the city a little.
+    const onWindowMove = (e: PointerEvent) => {
+      parallaxX = (e.clientX / window.innerWidth - 0.5) * 0.35
+      parallaxY = (e.clientY / window.innerHeight - 0.5) * 0.12
+    }
     if (controls) el.style.touchAction = 'none'
     el.addEventListener('pointermove', onMove)
     el.addEventListener('pointerleave', onLeave)
     el.addEventListener('pointerdown', onDown)
     el.addEventListener('pointerup', onUp)
     if (controls) el.addEventListener('wheel', onWheel, { passive: false })
+    if (!controls && !reduceMotion) window.addEventListener('pointermove', onWindowMove)
 
     const resize = () => {
       const { clientWidth: w, clientHeight: h } = mount
       renderer.setSize(w, h, false)
       composer.setPixelRatio(renderer.getPixelRatio())
       composer.setSize(w, h)
+      mirror.getRenderTarget().setSize(Math.max(256, Math.round(w * pr * 0.5)), Math.max(256, Math.round(h * pr * 0.5)))
       camera.aspect = w / Math.max(h, 1)
-      // Wide screens push the city aside for the copy; narrow ones keep it centred.
-      // Portrait screens lift it into the top half, above the copy.
-      const shift = camera.aspect > 1.2 ? offsetX : 0
-      const lift = offsetX && camera.aspect < 1 ? 0.2 : 0
-      if (shift || lift) camera.setViewOffset(w, h, -shift * w, lift * h, w, h)
+      // Wide screens push the city aside for the copy; portrait ones lift it above the copy.
+      const shift = camera.aspect > 1.2 ? offsetRef.current : 0
+      const raise = offsetRef.current && camera.aspect < 1 ? 0.2 : 0
+      if (shift || raise) camera.setViewOffset(w, h, -shift * w, raise * h, w, h)
       else camera.clearViewOffset()
       camera.updateProjectionMatrix()
-      if (!userZoomed) targetDist = dist = Math.min(maxD, fitDist())
+      if (!userZoomed && focusIdx < 0) targetDist = dist = Math.min(maxD, fitDist())
     }
     const ro = new ResizeObserver(resize)
     ro.observe(mount)
     resize()
+    apiRef.current = { focus, reframe: resize, repaint: paintTowers }
 
     let visible = true
     const io = new IntersectionObserver(([entry]) => (visible = entry.isIntersecting))
@@ -473,8 +666,8 @@ export default function CodeCity({
     const tourable = tour ? towers.map((_, i) => i).filter((i) => arcs.filter((l) => l.a === i).length >= 2) : []
     let tourAt = 0, tourStep = 0
 
-    // --- loop ----------------------------------------------------------------------
-    const bead = new THREE.Vector3()
+    // --- loop -------------------------------------------------------------------------------------
+    const tmp = new THREE.Vector3()
     let frame = 0
     const render = () => {
       frame = requestAnimationFrame(render)
@@ -483,16 +676,22 @@ export default function CodeCity({
       const t = clock.elapsedTime
       towerMat.uniforms.uTime.value = reduceMotion ? 0 : t
 
-      // Towers rise in a wave from the city centre on first paint.
-      let growing = false
+      // Towers rise in a wave from the city centre on first paint; the hovered one lifts.
+      let moving = false
       towers.forEach((tw, i) => {
-        if (rise[i] >= 1) return
-        const delay = Math.hypot(tw.x, tw.z) / (radius + 1) * 0.9
-        rise[i] = Math.min(1, Math.max(0, (t - delay) * 1.6))
-        setTower(i, 1 - (1 - rise[i]) ** 3)
-        growing = true
+        const wantLift = i === hoverIdx ? 1 : 0
+        if (rise[i] >= 1 && lift[i] === wantLift) return
+        if (rise[i] < 1) {
+          const delay = (Math.hypot(tw.x, tw.z) / (radius + 1)) * 0.9
+          rise[i] = Math.min(1, Math.max(0, (t - delay) * 1.6))
+        }
+        lift[i] = reduceMotion ? wantLift : lift[i] + (wantLift - lift[i]) * Math.min(1, dt * 14)
+        if (Math.abs(lift[i] - wantLift) < 0.01) lift[i] = wantLift
+        setTower(i)
+        moving = true
       })
-      if (growing) city.instanceMatrix.needsUpdate = true
+      if (moving) { city.instanceMatrix.needsUpdate = true; city.computeBoundingSphere() }
+      if (pulseRef.current?.size) paintTowers()
 
       if (tourable.length && !selectedRef.current && !reduceMotion && t > 1.6 && t - tourAt > 3.4) {
         tourAt = t
@@ -502,19 +701,28 @@ export default function CodeCity({
       // Lit arcs draw themselves outward, then carry a bead each.
       if (lit.length) {
         litGrow = Math.min(1, litGrow + dt * 1.8)
-        // Tube indices run along the curve, so a partial draw range grows the arc from its caller.
         litGroup.children.forEach((c) => {
           const g = (c as THREE.Mesh).geometry
           g.setDrawRange(0, Math.ceil((g.index!.count / 6) * litGrow) * 6)
         })
         beads.count = litGrow >= 1 && !reduceMotion ? lit.length : 0
         lit.forEach((l, k) => {
-          arcPoint(towers[l.a], towers[l.b], (t * 0.55 + k * 0.13) % 1, bead)
-          beads.setMatrixAt(k, m.makeTranslation(bead.x, bead.y, bead.z))
+          arcPoint(towers[l.a], towers[l.b], (t * 0.55 + k * 0.13) % 1, tmp)
+          beads.setMatrixAt(k, m.makeTranslation(tmp.x, tmp.y, tmp.z))
         })
         beads.instanceMatrix.needsUpdate = true
       } else {
         beads.count = 0
+      }
+
+      if (trafficPoints.visible) {
+        traffic.forEach((p, k) => {
+          p.t += dt * p.speed
+          if (p.t > 1) { p.t = 0; p.arc = Math.floor(Math.random() * arcs.length) }
+          const l = arcs[p.arc]
+          arcPoint(towers[l.a], towers[l.b], p.t, tmp).toArray(trafficPos, k * 3)
+        })
+        trafficGeo.attributes.position.needsUpdate = true
       }
 
       if (focusIdx >= 0) {
@@ -526,24 +734,47 @@ export default function CodeCity({
         ringMat.opacity = 0.9 * (1 - cycle)
       }
 
+      // Fly-to: glide the orbit centre to the selected tower (and closer), or back to the city.
+      if (focusIdx >= 0 && controls) {
+        const tw = towers[focusIdx]
+        lookTarget.set(tw.x, tw.h * 0.6, tw.z)
+        if (!userZoomed) targetDist = Math.max(minD, Math.min(fitDist() * 0.55, radius * 1.6 + 18))
+      } else {
+        lookTarget.set(0, 1.5, 0)
+        if (!userZoomed) targetDist = Math.min(maxD, fitDist())
+      }
+      look.lerp(lookTarget, reduceMotion ? 1 : Math.min(1, dt * 3))
+
       if (!dragging && !reduceMotion && performance.now() - idleSince > 1200) yaw += dt * 0.05
+      tiltX += (parallaxX - tiltX) * Math.min(1, dt * 3)
+      tiltY += (parallaxY - tiltY) * Math.min(1, dt * 3)
       dist += (targetDist - dist) * 0.1
       fog.near = dist * 0.9
       fog.far = dist * 2.4
       towerMat.uniforms.uNear.value = fog.near
       towerMat.uniforms.uFar.value = fog.far
-      camera.position.set(Math.sin(yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist)
-      camera.lookAt(0, 1.5, 0)
+      const y = yaw + tiltX, p = Math.max(0.15, pitch + tiltY)
+      camera.position.set(look.x + Math.sin(y) * Math.cos(p) * dist, look.y + Math.sin(p) * dist, look.z + Math.cos(y) * Math.cos(p) * dist)
+      camera.lookAt(look)
       composer.render()
 
       const label = labelRef.current
       if (label) {
         if (hoverIdx >= 0) {
           const tw = towers[hoverIdx]
-          bead.set(tw.x, tw.h, tw.z).project(camera)
-          label.style.transform = `translate(${(bead.x * 0.5 + 0.5) * mount.clientWidth}px, ${(-bead.y * 0.5 + 0.5) * mount.clientHeight}px)`
+          tmp.set(tw.x, tw.h, tw.z).project(camera)
+          label.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * mount.clientWidth}px, ${(-tmp.y * 0.5 + 0.5) * mount.clientHeight}px)`
           label.style.opacity = '1'
         } else label.style.opacity = '0'
+      }
+      if (districts) {
+        districtData.forEach((d, k) => {
+          const node = districtRefs.current[k]
+          if (!node) return
+          tmp.set(d.x, 0.2, d.z).project(camera)
+          node.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * mount.clientWidth}px, ${(-tmp.y * 0.5 + 0.5) * mount.clientHeight}px)`
+          node.style.opacity = tmp.z > 1 || focusIdx >= 0 ? '0' : '1'
+        })
       }
     }
     render()
@@ -557,9 +788,11 @@ export default function CodeCity({
       el.removeEventListener('pointerdown', onDown)
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('wheel', onWheel)
-      disposables.forEach((d) => d.dispose())
+      window.removeEventListener('pointermove', onWindowMove)
+      disposables.forEach((x) => x.dispose())
       clearLit()
       city.dispose(); slabs.dispose(); beads.dispose()
+      mirror.dispose()
       bloom.dispose()
       composer.dispose()
       renderer.dispose()
@@ -568,21 +801,46 @@ export default function CodeCity({
     }
     // The city is rebuilt only when the graph itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges])
+  }, [nodes, edges, pal, districts])
 
   useEffect(() => {
     apiRef.current?.focus(selected, highlight)
-  }, [selected, highlight, nodes, edges])
+  }, [selected, highlight, nodes, edges, pal])
+
+  // A pulse that ends must clear its glow.
+  useEffect(() => {
+    apiRef.current?.repaint()
+  }, [pulse])
+
+  // Reframe (without rebuilding) when the requested offset changes.
+  useEffect(() => {
+    apiRef.current?.reframe()
+  }, [offsetX])
 
   return (
-    <div className={`city ${className ?? ''}`}>
-      <div ref={mountRef} className="city-canvas" />
-      <div ref={labelRef} className="city-label" aria-hidden>
+    <div className={cn('relative overflow-hidden', className)}>
+      <div ref={mountRef} className="absolute inset-0 [&>canvas]:block [&>canvas]:size-full" />
+      {districtList.map((d, k) => (
+        <div
+          key={d.name + k}
+          ref={(node) => { districtRefs.current[k] = node }}
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 z-[5] opacity-0 transition-opacity duration-300"
+        >
+          <span className="block -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-thread/30 bg-film/70 px-2.5 py-0.5 font-mono text-[0.7rem] text-thread shadow-[0_0_14px_rgb(177_140_255/0.25)] backdrop-blur-sm">
+            {d.name}
+          </span>
+        </div>
+      ))}
+      <div ref={labelRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-10 opacity-0 transition-opacity duration-150">
         {hover && (
-          <>
-            <strong>{hover.name ?? hover.id}</strong>
-            <span>{hover.filepath}{hover.lines ? `, ${hover.lines} lines` : ''}</span>
-          </>
+          <div className="-translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-md border border-thread/40 bg-popover/95 px-2.5 py-1.5 shadow-[0_0_20px_rgb(177_140_255/0.25)] backdrop-blur">
+            <div className="font-mono text-[0.78rem] font-medium">{hover.name ?? hover.id}</div>
+            <div className="font-mono text-[0.7rem] text-muted-foreground">
+              {hover.filepath}
+              {hover.lines ? <span className="font-sans">, {hover.lines} lines</span> : null}
+            </div>
+          </div>
         )}
       </div>
     </div>
