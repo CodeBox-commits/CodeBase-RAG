@@ -113,6 +113,11 @@ curl -s localhost:8000/ready
 
 Stop it with `docker compose down`. Neo4j and Qdrant data are kept in Docker volumes.
 
+Everything you index stays on your machine: the repository is cloned to a temporary folder,
+indexed into the local databases, then deleted. Your key stays in `backend/.env`, which git
+and the Docker build both ignore. The local stack listens on `127.0.0.1` only, since it has
+no sign-in; see [Deployment](#deployment) for running it on a server.
+
 ## Configuration
 
 Set these in `backend/.env` (see [`backend/.env.example`](backend/.env.example)):

@@ -36,3 +36,6 @@ htmlcov/
 
 # Local backups (deploy/backup.sh)
 backups/
+
+# Local Claude Code settings
+.claude/
