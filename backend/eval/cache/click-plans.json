@@ -1,0 +1,265 @@
+{
+  "model": "gemini-3.5-flash-lite",
+  "plans": {
+    "How do find_object and ensure_object work on the context?": {
+      "complexity": "simple",
+      "queries": [
+        "find_object implementation",
+        "ensure_object context"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "find_object",
+        "ensure_object"
+      ]
+    },
+    "How does Choice compare the given value with its choices when case_sensitive is False?": {
+      "complexity": "simple",
+      "queries": [
+        "Choice case_sensitive comparison",
+        "Choice choices validation"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "Choice",
+        "case_sensitive"
+      ]
+    },
+    "How does CliRunner.invoke run a command inside a test?": {
+      "complexity": "simple",
+      "queries": [
+        "CliRunner.invoke implementation"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "CliRunner.invoke"
+      ]
+    },
+    "How does Context.forward differ from Context.invoke?": {
+      "complexity": "simple",
+      "queries": [
+        "Context.forward Context.invoke implementation"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "Context.forward",
+        "Context.invoke"
+      ]
+    },
+    "How does a Group find and run the subcommand named on the command line?": {
+      "complexity": "complex",
+      "queries": [
+        "Group find and run subcommand",
+        "Group parse command line subcommand execution"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "Group"
+      ]
+    },
+    "How does a click program handle a shell completion request when it starts?": {
+      "complexity": "complex",
+      "queries": [
+        "click shell completion startup handling",
+        "shell_complete completion mechanism"
+      ],
+      "query_type": "implementation",
+      "symbols": []
+    },
+    "How does a decorator made with make_pass_decorator find the object it passes to the function?": {
+      "complexity": "complex",
+      "queries": [
+        "make_pass_decorator implementation",
+        "pass_decorator object lookup context"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "make_pass_decorator"
+      ]
+    },
+    "How does auto_envvar_prefix build the environment variable name for an option?": {
+      "complexity": "simple",
+      "queries": [
+        "auto_envvar_prefix environment variable name",
+        "auto_envvar_prefix implementation"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "auto_envvar_prefix"
+      ]
+    },
+    "How does get_current_context know which context is the active one?": {
+      "complexity": "simple",
+      "queries": [
+        "get_current_context active context implementation"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "get_current_context"
+      ]
+    },
+    "How does the context read a default from default_map, and are callable defaults called?": {
+      "complexity": "complex",
+      "queries": [
+        "default_map callable default handling",
+        "context read default default_map"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "default_map"
+      ]
+    },
+    "How is a command line turned into the keyword arguments of the command's callback, from parsing to the call?": {
+      "complexity": "complex",
+      "queries": [
+        "command line parsing callback keyword arguments",
+        "command invocation parameter binding"
+      ],
+      "query_type": "call_flow",
+      "symbols": []
+    },
+    "If a parameter isn't given on the command line, where does click look for its value, and in what order?": {
+      "complexity": "complex",
+      "queries": [
+        "click parameter value fallback order command line",
+        "click context option default value lookup"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "click"
+      ]
+    },
+    "In chain mode, how does a Group run several subcommands, and what does its result callback receive?": {
+      "complexity": "complex",
+      "queries": [
+        "Group chain mode subcommands execution",
+        "Group result callback arguments"
+      ],
+      "query_type": "call_flow",
+      "symbols": [
+        "Group"
+      ]
+    },
+    "What breaks if Command.make_context changes?": {
+      "complexity": "complex",
+      "queries": [
+        "Command.make_context callers",
+        "Command.make_context usage"
+      ],
+      "query_type": "impact",
+      "symbols": [
+        "Command.make_context"
+      ]
+    },
+    "What does a UsageError print when it is shown to the user?": {
+      "complexity": "simple",
+      "queries": [
+        "UsageError print message",
+        "class UsageError"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "UsageError"
+      ]
+    },
+    "What does clamp=True do for an IntRange when the value is out of range?": {
+      "complexity": "simple",
+      "queries": [
+        "IntRange clamp True",
+        "IntRange out of range clamp"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "IntRange"
+      ]
+    },
+    "What does standalone_mode=False change when a command runs through Command.main?": {
+      "complexity": "simple",
+      "queries": [
+        "Command.main standalone_mode"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "standalone_mode",
+        "Command.main"
+      ]
+    },
+    "What happens when the subcommand name given on the command line doesn't exist?": {
+      "complexity": "simple",
+      "queries": [
+        "subcommand not found error handling",
+        "unknown subcommand cli parser"
+      ],
+      "query_type": "bug_analysis",
+      "symbols": []
+    },
+    "What happens, step by step, when a click command object is called like a function from a script?": {
+      "complexity": "complex",
+      "queries": [
+        "click command call invocation function",
+        "class Command __call__ execution"
+      ],
+      "query_type": "call_flow",
+      "symbols": []
+    },
+    "What steps does Parameter.process_value go through?": {
+      "complexity": "simple",
+      "queries": [
+        "Parameter.process_value implementation"
+      ],
+      "query_type": "call_flow",
+      "symbols": [
+        "Parameter.process_value"
+      ]
+    },
+    "What value does a flag option get when it's used without a value?": {
+      "complexity": "simple",
+      "queries": [
+        "flag option value default boolean"
+      ],
+      "query_type": "implementation",
+      "symbols": []
+    },
+    "What would be affected if Parameter.get_default changed?": {
+      "complexity": "complex",
+      "queries": [
+        "Parameter.get_default callers",
+        "Parameter.get_default usage"
+      ],
+      "query_type": "impact",
+      "symbols": [
+        "Parameter.get_default"
+      ]
+    },
+    "When Context.invoke is given another Command instead of a plain function, how are that command's missing parameters filled in?": {
+      "complexity": "complex",
+      "queries": [
+        "Context.invoke Command parameter resolution",
+        "Context invoke handle Command arguments"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "Context.invoke",
+        "Command"
+      ]
+    },
+    "When are a context's close callbacks run?": {
+      "complexity": "simple",
+      "queries": [
+        "context close callbacks execution",
+        "close callbacks run"
+      ],
+      "query_type": "implementation",
+      "symbols": []
+    },
+    "When does an option prompt the user for its value?": {
+      "complexity": "simple",
+      "queries": [
+        "option prompt user value",
+        "prompt for value option implementation"
+      ],
+      "query_type": "implementation",
+      "symbols": []
+    }
+  }
+}

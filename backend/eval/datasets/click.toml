@@ -1,0 +1,214 @@
+# Questions about pallets/click, labelled by reading the code at `commit`.
+#
+# gold:    the code an answer can't be right without ("path::Qualified.name")
+# mention: facts a correct answer states; each is a list of accepted phrasings
+# See eval/dataset.py for the format.
+
+repo = "https://github.com/pallets/click"
+commit = "2247b35ea1c47c727d7a06e51fa280e12a863ff6"
+
+# --- running a command ------------------------------------------------------------------
+
+[[case]]
+id = "standalone-mode"
+kind = "behaviour"
+question = "What does standalone_mode=False change when a command runs through Command.main?"
+gold = ["src/click/core.py::Command.main"]
+mention = [["propagat", "re-raise", "raised to the caller", "raises"], ["return value", "returns the", "returned"], ["exit code", "exit_code"]]
+
+[[case]]
+id = "script-entry"
+kind = "call_flow"
+question = "What happens, step by step, when a click command object is called like a function from a script?"
+gold = ["src/click/core.py::Command.__call__", "src/click/core.py::Command.main", "src/click/core.py::Command.make_context"]
+mention = [["main"], ["make_context"], ["sys.exit", "exits", "ctx.exit"]]
+
+[[case]]
+id = "ctx-invoke-command"
+kind = "behaviour"
+question = "When Context.invoke is given another Command instead of a plain function, how are that command's missing parameters filled in?"
+gold = ["src/click/core.py::Context.invoke"]
+mention = [["get_default", "default value", "defaults"], ["type_cast_value", "cast"], ["_make_sub_context", "sub-context", "new context", "sub context"]]
+
+[[case]]
+id = "ctx-forward"
+kind = "behaviour"
+question = "How does Context.forward differ from Context.invoke?"
+gold = ["src/click/core.py::Context.forward", "src/click/core.py::Context.invoke"]
+mention = [["self.params", "current context's param", "current parameters", "params"], ["TypeError", "only other commands", "not callbacks", "cannot invoke callbacks"]]
+
+# --- groups --------------------------------------------------------------------------------
+
+[[case]]
+id = "group-dispatch"
+kind = "call_flow"
+question = "How does a Group find and run the subcommand named on the command line?"
+gold = ["src/click/core.py::Group.invoke", "src/click/core.py::Group.resolve_command", "src/click/core.py::Group.get_command"]
+mention = [["resolve_command"], ["get_command"], ["make_context"], ["invoked_subcommand"]]
+
+[[case]]
+id = "chain-mode"
+kind = "behaviour"
+question = "In chain mode, how does a Group run several subcommands, and what does its result callback receive?"
+gold = ["src/click/core.py::Group.invoke"]
+mention = [["list"], ["context", "contexts"], ["result callback", "result_callback", "_result_callback", "_process_result"]]
+
+[[case]]
+id = "unknown-subcommand"
+kind = "behaviour"
+question = "What happens when the subcommand name given on the command line doesn't exist?"
+gold = ["src/click/core.py::Group.resolve_command", "src/click/exceptions.py::NoSuchCommand"]
+mention = [["NoSuchCommand"], ["token_normalize_func", "normaliz"], ["looks like an option", "--help", "parse_args"]]
+
+# --- parameters ---------------------------------------------------------------------------
+
+[[case]]
+id = "value-precedence"
+kind = "behaviour"
+question = "If a parameter isn't given on the command line, where does click look for its value, and in what order?"
+gold = ["src/click/core.py::Parameter.consume_value"]
+mention = [["environment", "envvar"], ["default_map", "default map"], ["get_default", "parameter's default", "default value"]]
+
+[[case]]
+id = "auto-envvar"
+kind = "behaviour"
+question = "How does auto_envvar_prefix build the environment variable name for an option?"
+gold = ["src/click/core.py::Option.resolve_envvar_value"]
+mention = [["auto_envvar_prefix"], ["upper", "uppercase", "upper-case"]]
+
+[[case]]
+id = "prompt-when"
+kind = "behaviour"
+question = "When does an option prompt the user for its value?"
+gold = ["src/click/core.py::Option.consume_value", "src/click/core.py::Option.prompt_for_value"]
+mention = [["prompt_for_value"], ["required", "prompt_required"], ["resilient_parsing", "resilient parsing"]]
+
+[[case]]
+id = "flag-without-value"
+kind = "behaviour"
+question = "What value does a flag option get when it's used without a value?"
+gold = ["src/click/core.py::Option.consume_value", "src/click/core.py::Option.flag_activation_value"]
+mention = [["flag_activation_value", "activation value", "flag_value"]]
+
+[[case]]
+id = "process-value"
+kind = "behaviour"
+question = "What steps does Parameter.process_value go through?"
+gold = ["src/click/core.py::Parameter.process_value"]
+mention = [["type_cast_value", "type cast", "convert"], ["MissingParameter", "required"], ["callback"]]
+
+[[case]]
+id = "lookup-default"
+kind = "lookup"
+question = "How does the context read a default from default_map, and are callable defaults called?"
+gold = ["src/click/core.py::Context.lookup_default"]
+mention = [["default_map"], ["callable", "called", "value()"]]
+
+[[case]]
+id = "parsing-to-callback"
+kind = "architecture"
+question = "How is a command line turned into the keyword arguments of the command's callback, from parsing to the call?"
+gold = ["src/click/core.py::Command.parse_args", "src/click/core.py::Parameter.handle_parse_result", "src/click/parser.py::_OptionParser.parse_args"]
+mention = [["make_parser", "_OptionParser", "parser"], ["handle_parse_result"], ["process_value", "consume_value"], ["ctx.params", "params"]]
+
+# --- the context object -----------------------------------------------------------------
+
+[[case]]
+id = "find-ensure-object"
+kind = "behaviour"
+question = "How do find_object and ensure_object work on the context?"
+gold = ["src/click/core.py::Context.find_object", "src/click/core.py::Context.ensure_object"]
+mention = [["parent"], ["new instance", "object_type()", "creates", "instantiat", "sets"]]
+
+[[case]]
+id = "pass-decorator"
+kind = "call_flow"
+question = "How does a decorator made with make_pass_decorator find the object it passes to the function?"
+gold = ["src/click/decorators.py::make_pass_decorator", "src/click/core.py::Context.find_object"]
+mention = [["get_current_context"], ["find_object"], ["ensure_object", "ensure"], ["RuntimeError"]]
+
+[[case]]
+id = "current-context"
+kind = "lookup"
+question = "How does get_current_context know which context is the active one?"
+gold = ["src/click/globals.py::get_current_context", "src/click/core.py::Context.__enter__"]
+mention = [["stack"], ["push_context", "__enter__", "with"], ["RuntimeError", "silent"]]
+
+[[case]]
+id = "context-close"
+kind = "behaviour"
+question = "When are a context's close callbacks run?"
+gold = ["src/click/core.py::Context.__exit__", "src/click/core.py::Context.close"]
+mention = [["depth", "_depth"], ["call_on_close", "close"]]
+
+# --- types and errors ---------------------------------------------------------------------
+
+[[case]]
+id = "intrange-clamp"
+kind = "behaviour"
+question = "What does clamp=True do for an IntRange when the value is out of range?"
+gold = ["src/click/types.py::_NumberRangeBase.convert", "src/click/types.py::IntRange._clamp"]
+mention = [["min", "max", "bound", "limit"], ["fail", "error", "not in the range"]]
+
+[[case]]
+id = "choice-case-insensitive"
+kind = "behaviour"
+question = "How does Choice compare the given value with its choices when case_sensitive is False?"
+gold = ["src/click/types.py::Choice.normalize_choice"]
+mention = [["casefold"], ["token_normalize_func"]]
+
+[[case]]
+id = "usage-error-show"
+kind = "behaviour"
+question = "What does a UsageError print when it is shown to the user?"
+gold = ["src/click/exceptions.py::UsageError.show"]
+mention = [["usage", "get_usage"], ["help"], ["Error:"]]
+
+# --- testing and completion ---------------------------------------------------------------
+
+[[case]]
+id = "cli-runner"
+kind = "lookup"
+question = "How does CliRunner.invoke run a command inside a test?"
+gold = ["src/click/testing.py::CliRunner.invoke", "src/click/testing.py::CliRunner.isolation"]
+mention = [["isolation", "isolated"], ["main"], ["Result"], ["catch_exceptions", "exception"]]
+
+[[case]]
+id = "shell-completion"
+kind = "call_flow"
+question = "How does a click program handle a shell completion request when it starts?"
+gold = ["src/click/core.py::Command._main_shell_completion", "src/click/shell_completion.py::shell_complete"]
+mention = [["complete_var", "_COMPLETE", "environment variable"], ["source"], ["complete"]]
+
+# --- impact --------------------------------------------------------------------------------
+
+[[case]]
+id = "impact-make-context"
+kind = "impact"
+question = "What breaks if Command.make_context changes?"
+gold = ["src/click/core.py::Command.make_context", "src/click/core.py::Command.main", "src/click/core.py::Group.invoke"]
+mention = [["Command.main", "main"], ["Group.invoke"]]
+
+[[case]]
+id = "impact-get-default"
+kind = "impact"
+question = "What would be affected if Parameter.get_default changed?"
+gold = ["src/click/core.py::Parameter.get_default", "src/click/core.py::Option.get_default", "src/click/core.py::Parameter.consume_value"]
+mention = [["Option.get_default", "override"], ["consume_value"], ["Context.invoke", "invoke"]]
+
+# --- not in the code: the right answer says so -----------------------------------------------
+
+[[case]]
+id = "no-http-config"
+kind = "unanswerable"
+question = "How does click download remote configuration over HTTP before running a command?"
+
+[[case]]
+id = "no-asyncio"
+kind = "unanswerable"
+question = "Which function starts the asyncio event loop for async command callbacks?"
+
+[[case]]
+id = "no-yaml"
+kind = "unanswerable"
+question = "Where does click parse YAML config files into default_map?"

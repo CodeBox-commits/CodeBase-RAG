@@ -39,3 +39,6 @@ backups/
 
 # Local Claude Code settings
 .claude/
+
+# Evaluation runs (baselines worth keeping go in backend/eval/baselines/)
+backend/eval/results/
