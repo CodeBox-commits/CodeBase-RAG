@@ -138,6 +138,36 @@ Indexing runs in a Celery worker, so the UI never blocks:
    keeps its old data and is retried next run. `"full": true`, or a parser change (`INDEX_VERSION`), rebuilds
    everything.
 
+## Quality
+
+Measured with the [evaluation harness](backend/eval/) on 28 hand-labelled questions about
+[`pallets/click`](https://github.com/pallets/click): each names the code a correct answer depends on.
+Retrieval runs make no model calls (the planner's output is recorded), so anyone can reproduce them.
+
+| How much of the right code… | |
+|---|---|
+| is found by search (24 candidates) | 88% |
+| survives reranking (top 8) | 75% |
+| reaches the model, after graph expansion | **83%** |
+| reaches the model completely, for every question | 72% |
+
+What each stage adds, measured by switching it off:
+
+| Without | Right code reaching the model | Questions with all of it | First right hit (MRR) |
+|---|---|---|---|
+| Nothing (full pipeline) | 83% | 72% | 75% |
+| Graph expansion | 79% | 64% | 75% |
+| BM25 (vectors only) | 79% | 68% | 75% |
+| Query planner | 81% | 68% | 75% |
+| Cross-encoder reranker | 79% | 72% | 57% |
+| Vectors (BM25 only) | 75% | 68% | 46% |
+
+With 25 answerable questions, one question is 4 points, so small differences are noise. The weak
+spot is code that connects steps rather than doing the work (`Command.parse_args`,
+`Context.__exit__`, `Group.resolve_command`): in 6 of the 7 questions missing some of it, search
+found it and the reranker's cut to 8 dropped it. Details and
+how to run it: [`backend/eval/README.md`](backend/eval/README.md).
+
 ## Tech stack
 
 | Layer | Tools |

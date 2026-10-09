@@ -1,0 +1,4239 @@
+{
+  "meta": {
+    "dataset": "click",
+    "repo": "https://github.com/pallets/click",
+    "mode": "retrieval",
+    "labelled_commit": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+    "indexed_commit": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+    "index_version": 2,
+    "code_version": "307ebf9",
+    "llm_model": "gemini-3.5-flash-lite",
+    "reranker": "ms-marco-MiniLM-L-12-v2",
+    "ran_at": "2026-10-09T19:15:18+00:00"
+  },
+  "retrieval": {
+    "variants": {
+      "full": {
+        "description": "The pipeline as configured",
+        "summary": {
+          "cases": 25,
+          "all_gold_in_context": 0.72,
+          "candidate_recall": 0.88,
+          "context_chunks": 11.88,
+          "context_lines": 902.72,
+          "context_recall": 0.8267,
+          "reciprocal_rank": 0.749,
+          "reranked_recall": 0.7467
+        },
+        "by_kind": {
+          "architecture": {
+            "cases": 1,
+            "all_gold_in_context": 0.0,
+            "candidate_recall": 0.6667,
+            "context_chunks": 13.0,
+            "context_lines": 2025.0,
+            "context_recall": 0.0,
+            "reciprocal_rank": 0.0,
+            "reranked_recall": 0.0
+          },
+          "behaviour": {
+            "cases": 15,
+            "all_gold_in_context": 0.8,
+            "candidate_recall": 1.0,
+            "context_chunks": 12.0667,
+            "context_lines": 836.6667,
+            "context_recall": 0.9,
+            "reciprocal_rank": 0.7944,
+            "reranked_recall": 0.9
+          },
+          "call_flow": {
+            "cases": 4,
+            "all_gold_in_context": 0.5,
+            "candidate_recall": 0.625,
+            "context_chunks": 10.75,
+            "context_lines": 595.0,
+            "context_recall": 0.6667,
+            "reciprocal_rank": 0.5774,
+            "reranked_recall": 0.5417
+          },
+          "impact": {
+            "cases": 2,
+            "all_gold_in_context": 1.0,
+            "candidate_recall": 0.6667,
+            "context_chunks": 13.0,
+            "context_lines": 1532.0,
+            "context_recall": 1.0,
+            "reciprocal_rank": 1.0,
+            "reranked_recall": 0.5
+          },
+          "lookup": {
+            "cases": 3,
+            "all_gold_in_context": 0.6667,
+            "candidate_recall": 0.8333,
+            "context_chunks": 11.3333,
+            "context_lines": 849.6667,
+            "context_recall": 0.8333,
+            "reciprocal_rank": 0.8333,
+            "reranked_recall": 0.6667
+          }
+        },
+        "cases": [
+          {
+            "id": "standalone-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 553,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "standalone_mode",
+                "Command.main"
+              ],
+              "rewritten_queries": [
+                "Command.main standalone_mode"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "script-entry",
+            "kind": "call_flow",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 6,
+            "reciprocal_rank": 0.16666666666666666,
+            "context_chunks": 8,
+            "context_lines": 1083,
+            "missing": [
+              "src/click/core.py::Command.__call__",
+              "src/click/core.py::Command.make_context"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click command call invocation function",
+                "class Command __call__ execution"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "ctx-invoke-command",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1240,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Context.invoke",
+                "Command"
+              ],
+              "rewritten_queries": [
+                "Context.invoke Command parameter resolution",
+                "Context invoke handle Command arguments"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "ctx-forward",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 444,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Context.forward",
+                "Context.invoke"
+              ],
+              "rewritten_queries": [
+                "Context.forward Context.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "group-dispatch",
+            "kind": "call_flow",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 7,
+            "reciprocal_rank": 0.14285714285714285,
+            "context_chunks": 13,
+            "context_lines": 784,
+            "missing": [
+              "src/click/core.py::Group.resolve_command",
+              "src/click/core.py::Group.get_command"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group find and run subcommand",
+                "Group parse command line subcommand execution"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "chain-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 795,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group chain mode subcommands execution",
+                "Group result callback arguments"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "unknown-subcommand",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 827,
+            "missing": [
+              "src/click/core.py::Group.resolve_command"
+            ],
+            "plan": {
+              "query_type": "bug_analysis",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "subcommand not found error handling",
+                "unknown subcommand cli parser"
+              ]
+            },
+            "strategy": "hybrid",
+            "errors": []
+          },
+          {
+            "id": "value-precedence",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 4,
+            "reciprocal_rank": 0.25,
+            "context_chunks": 13,
+            "context_lines": 2008,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "click"
+              ],
+              "rewritten_queries": [
+                "click parameter value fallback order command line",
+                "click context option default value lookup"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "auto-envvar",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1127,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "auto_envvar_prefix"
+              ],
+              "rewritten_queries": [
+                "auto_envvar_prefix environment variable name",
+                "auto_envvar_prefix implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "prompt-when",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1261,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "option prompt user value",
+                "prompt for value option implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "flag-without-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 1211,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "flag option value default boolean"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "process-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1310,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "simple",
+              "symbols": [
+                "Parameter.process_value"
+              ],
+              "rewritten_queries": [
+                "Parameter.process_value implementation"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "lookup-default",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1254,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "default_map"
+              ],
+              "rewritten_queries": [
+                "default_map callable default handling",
+                "context read default default_map"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "parsing-to-callback",
+            "kind": "architecture",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 13,
+            "context_lines": 2025,
+            "missing": [
+              "src/click/core.py::Command.parse_args",
+              "src/click/core.py::Parameter.handle_parse_result",
+              "src/click/parser.py::_OptionParser.parse_args"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "command line parsing callback keyword arguments",
+                "command invocation parameter binding"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "find-ensure-object",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 898,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "find_object",
+                "ensure_object"
+              ],
+              "rewritten_queries": [
+                "find_object implementation",
+                "ensure_object context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "pass-decorator",
+            "kind": "call_flow",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 186,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "make_pass_decorator"
+              ],
+              "rewritten_queries": [
+                "make_pass_decorator implementation",
+                "pass_decorator object lookup context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "current-context",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 105,
+            "missing": [
+              "src/click/core.py::Context.__enter__"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "get_current_context"
+              ],
+              "rewritten_queries": [
+                "get_current_context active context implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "context-close",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 155,
+            "missing": [
+              "src/click/core.py::Context.__exit__"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "context close callbacks execution",
+                "close callbacks run"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "intrange-clamp",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 8,
+            "context_lines": 122,
+            "missing": [
+              "src/click/types.py::_NumberRangeBase.convert"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "IntRange"
+              ],
+              "rewritten_queries": [
+                "IntRange clamp True",
+                "IntRange out of range clamp"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "choice-case-insensitive",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 10,
+            "context_lines": 290,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Choice",
+                "case_sensitive"
+              ],
+              "rewritten_queries": [
+                "Choice case_sensitive comparison",
+                "Choice choices validation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "usage-error-show",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 309,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "UsageError"
+              ],
+              "rewritten_queries": [
+                "UsageError print message",
+                "class UsageError"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "cli-runner",
+            "kind": "lookup",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 1190,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "CliRunner.invoke"
+              ],
+              "rewritten_queries": [
+                "CliRunner.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "shell-completion",
+            "kind": "call_flow",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 327,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click shell completion startup handling",
+                "shell_complete completion mechanism"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "impact-make-context",
+            "kind": "impact",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1824,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Command.make_context"
+              ],
+              "rewritten_queries": [
+                "Command.make_context callers",
+                "Command.make_context usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "impact-get-default",
+            "kind": "impact",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.6666666666666666,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1240,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Parameter.get_default"
+              ],
+              "rewritten_queries": [
+                "Parameter.get_default callers",
+                "Parameter.get_default usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          }
+        ]
+      },
+      "no_planner": {
+        "description": "No query plan: the raw question is the only query, with no symbols",
+        "summary": {
+          "cases": 25,
+          "all_gold_in_context": 0.68,
+          "candidate_recall": 0.84,
+          "context_chunks": 11.84,
+          "context_lines": 951.48,
+          "context_recall": 0.8067,
+          "reciprocal_rank": 0.749,
+          "reranked_recall": 0.72
+        },
+        "by_kind": {
+          "architecture": {
+            "cases": 1,
+            "all_gold_in_context": 0.0,
+            "candidate_recall": 0.6667,
+            "context_chunks": 14.0,
+            "context_lines": 1507.0,
+            "context_recall": 0.3333,
+            "reciprocal_rank": 0.0,
+            "reranked_recall": 0.0
+          },
+          "behaviour": {
+            "cases": 15,
+            "all_gold_in_context": 0.8,
+            "candidate_recall": 0.9333,
+            "context_chunks": 11.5333,
+            "context_lines": 837.0,
+            "context_recall": 0.8667,
+            "reciprocal_rank": 0.75,
+            "reranked_recall": 0.8333
+          },
+          "call_flow": {
+            "cases": 4,
+            "all_gold_in_context": 0.5,
+            "candidate_recall": 0.625,
+            "context_chunks": 13.0,
+            "context_lines": 819.25,
+            "context_recall": 0.75,
+            "reciprocal_rank": 0.619,
+            "reranked_recall": 0.5417
+          },
+          "impact": {
+            "cases": 2,
+            "all_gold_in_context": 0.5,
+            "candidate_recall": 0.6667,
+            "context_chunks": 12.5,
+            "context_lines": 1622.0,
+            "context_recall": 0.6667,
+            "reciprocal_rank": 1.0,
+            "reranked_recall": 0.6667
+          },
+          "lookup": {
+            "cases": 3,
+            "all_gold_in_context": 0.6667,
+            "candidate_recall": 0.8333,
+            "context_chunks": 10.6667,
+            "context_lines": 1068.0,
+            "context_recall": 0.8333,
+            "reciprocal_rank": 1.0,
+            "reranked_recall": 0.6667
+          }
+        },
+        "cases": [
+          {
+            "id": "standalone-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 606,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "script-entry",
+            "kind": "call_flow",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.6666666666666666,
+            "all_gold_in_context": false,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 14,
+            "context_lines": 1944,
+            "missing": [
+              "src/click/core.py::Command.__call__"
+            ],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "ctx-invoke-command",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1240,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "ctx-forward",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1202,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "group-dispatch",
+            "kind": "call_flow",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 7,
+            "reciprocal_rank": 0.14285714285714285,
+            "context_chunks": 13,
+            "context_lines": 784,
+            "missing": [
+              "src/click/core.py::Group.resolve_command",
+              "src/click/core.py::Group.get_command"
+            ],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "chain-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 14,
+            "context_lines": 847,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "unknown-subcommand",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 795,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "value-precedence",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 4,
+            "reciprocal_rank": 0.25,
+            "context_chunks": 12,
+            "context_lines": 1959,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "auto-envvar",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 1074,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "prompt-when",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1261,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "flag-without-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1234,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "process-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1310,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "lookup-default",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 1983,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "parsing-to-callback",
+            "kind": "architecture",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.0,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 14,
+            "context_lines": 1507,
+            "missing": [
+              "src/click/core.py::Parameter.handle_parse_result",
+              "src/click/parser.py::_OptionParser.parse_args"
+            ],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "find-ensure-object",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 9,
+            "context_lines": 180,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "pass-decorator",
+            "kind": "call_flow",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 187,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "current-context",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 105,
+            "missing": [
+              "src/click/core.py::Context.__enter__"
+            ],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "context-close",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 154,
+            "missing": [
+              "src/click/core.py::Context.__exit__"
+            ],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "intrange-clamp",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 8,
+            "context_lines": 221,
+            "missing": [
+              "src/click/types.py::_NumberRangeBase.convert"
+            ],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "choice-case-insensitive",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 10,
+            "context_lines": 291,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "usage-error-show",
+            "kind": "behaviour",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 8,
+            "context_lines": 181,
+            "missing": [
+              "src/click/exceptions.py::UsageError.show"
+            ],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "cli-runner",
+            "kind": "lookup",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1116,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "shell-completion",
+            "kind": "call_flow",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 362,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "impact-make-context",
+            "kind": "impact",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1923,
+            "missing": [
+              "src/click/core.py::Command.main",
+              "src/click/core.py::Group.invoke"
+            ],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "impact-get-default",
+            "kind": "impact",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1321,
+            "missing": [],
+            "plan": {
+              "query_type": "general",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": []
+            },
+            "strategy": "vector",
+            "errors": []
+          }
+        ]
+      },
+      "vector_only": {
+        "description": "Vector search only (no BM25)",
+        "summary": {
+          "cases": 25,
+          "all_gold_in_context": 0.68,
+          "candidate_recall": 0.84,
+          "context_chunks": 11.72,
+          "context_lines": 952.64,
+          "context_recall": 0.7867,
+          "reciprocal_rank": 0.7524,
+          "reranked_recall": 0.7267
+        },
+        "by_kind": {
+          "architecture": {
+            "cases": 1,
+            "all_gold_in_context": 0.0,
+            "candidate_recall": 0.6667,
+            "context_chunks": 13.0,
+            "context_lines": 2025.0,
+            "context_recall": 0.0,
+            "reciprocal_rank": 0.0,
+            "reranked_recall": 0.0
+          },
+          "behaviour": {
+            "cases": 15,
+            "all_gold_in_context": 0.8,
+            "candidate_recall": 0.9333,
+            "context_chunks": 11.7333,
+            "context_lines": 879.7333,
+            "context_recall": 0.8667,
+            "reciprocal_rank": 0.7667,
+            "reranked_recall": 0.8667
+          },
+          "call_flow": {
+            "cases": 4,
+            "all_gold_in_context": 0.5,
+            "candidate_recall": 0.625,
+            "context_chunks": 10.75,
+            "context_lines": 595.0,
+            "context_recall": 0.6667,
+            "reciprocal_rank": 0.5774,
+            "reranked_recall": 0.5417
+          },
+          "impact": {
+            "cases": 2,
+            "all_gold_in_context": 1.0,
+            "candidate_recall": 0.6667,
+            "context_chunks": 13.5,
+            "context_lines": 1898.5,
+            "context_recall": 1.0,
+            "reciprocal_rank": 1.0,
+            "reranked_recall": 0.5
+          },
+          "lookup": {
+            "cases": 3,
+            "all_gold_in_context": 0.3333,
+            "candidate_recall": 0.8333,
+            "context_chunks": 11.3333,
+            "context_lines": 806.0,
+            "context_recall": 0.6667,
+            "reciprocal_rank": 1.0,
+            "reranked_recall": 0.6667
+          }
+        },
+        "cases": [
+          {
+            "id": "standalone-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 553,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "standalone_mode",
+                "Command.main"
+              ],
+              "rewritten_queries": [
+                "Command.main standalone_mode"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "script-entry",
+            "kind": "call_flow",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 6,
+            "reciprocal_rank": 0.16666666666666666,
+            "context_chunks": 8,
+            "context_lines": 1083,
+            "missing": [
+              "src/click/core.py::Command.__call__",
+              "src/click/core.py::Command.make_context"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click command call invocation function",
+                "class Command __call__ execution"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "ctx-invoke-command",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1240,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Context.invoke",
+                "Command"
+              ],
+              "rewritten_queries": [
+                "Context.invoke Command parameter resolution",
+                "Context invoke handle Command arguments"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "ctx-forward",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1106,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Context.forward",
+                "Context.invoke"
+              ],
+              "rewritten_queries": [
+                "Context.forward Context.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "group-dispatch",
+            "kind": "call_flow",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 7,
+            "reciprocal_rank": 0.14285714285714285,
+            "context_chunks": 13,
+            "context_lines": 784,
+            "missing": [
+              "src/click/core.py::Group.resolve_command",
+              "src/click/core.py::Group.get_command"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group find and run subcommand",
+                "Group parse command line subcommand execution"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "chain-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 795,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group chain mode subcommands execution",
+                "Group result callback arguments"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "unknown-subcommand",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1002,
+            "missing": [],
+            "plan": {
+              "query_type": "bug_analysis",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "subcommand not found error handling",
+                "unknown subcommand cli parser"
+              ]
+            },
+            "strategy": "hybrid",
+            "errors": []
+          },
+          {
+            "id": "value-precedence",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 14,
+            "context_lines": 1992,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "click"
+              ],
+              "rewritten_queries": [
+                "click parameter value fallback order command line",
+                "click context option default value lookup"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "auto-envvar",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1127,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "auto_envvar_prefix"
+              ],
+              "rewritten_queries": [
+                "auto_envvar_prefix environment variable name",
+                "auto_envvar_prefix implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "prompt-when",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1261,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "option prompt user value",
+                "prompt for value option implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "flag-without-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 1211,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "flag option value default boolean"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "process-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1310,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "simple",
+              "symbols": [
+                "Parameter.process_value"
+              ],
+              "rewritten_queries": [
+                "Parameter.process_value implementation"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "lookup-default",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1254,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "default_map"
+              ],
+              "rewritten_queries": [
+                "default_map callable default handling",
+                "context read default default_map"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "parsing-to-callback",
+            "kind": "architecture",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 13,
+            "context_lines": 2025,
+            "missing": [
+              "src/click/core.py::Command.parse_args",
+              "src/click/core.py::Parameter.handle_parse_result",
+              "src/click/parser.py::_OptionParser.parse_args"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "command line parsing callback keyword arguments",
+                "command invocation parameter binding"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "find-ensure-object",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 898,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "find_object",
+                "ensure_object"
+              ],
+              "rewritten_queries": [
+                "find_object implementation",
+                "ensure_object context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "pass-decorator",
+            "kind": "call_flow",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 186,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "make_pass_decorator"
+              ],
+              "rewritten_queries": [
+                "make_pass_decorator implementation",
+                "pass_decorator object lookup context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "current-context",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 105,
+            "missing": [
+              "src/click/core.py::Context.__enter__"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "get_current_context"
+              ],
+              "rewritten_queries": [
+                "get_current_context active context implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "context-close",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 155,
+            "missing": [
+              "src/click/core.py::Context.__exit__"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "context close callbacks execution",
+                "close callbacks run"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "intrange-clamp",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 8,
+            "context_lines": 84,
+            "missing": [
+              "src/click/types.py::_NumberRangeBase.convert"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "IntRange"
+              ],
+              "rewritten_queries": [
+                "IntRange clamp True",
+                "IntRange out of range clamp"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "choice-case-insensitive",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 10,
+            "context_lines": 291,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Choice",
+                "case_sensitive"
+              ],
+              "rewritten_queries": [
+                "Choice case_sensitive comparison",
+                "Choice choices validation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "usage-error-show",
+            "kind": "behaviour",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 8,
+            "context_lines": 171,
+            "missing": [
+              "src/click/exceptions.py::UsageError.show"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "UsageError"
+              ],
+              "rewritten_queries": [
+                "UsageError print message",
+                "class UsageError"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "cli-runner",
+            "kind": "lookup",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1059,
+            "missing": [
+              "src/click/testing.py::CliRunner.isolation"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "CliRunner.invoke"
+              ],
+              "rewritten_queries": [
+                "CliRunner.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "shell-completion",
+            "kind": "call_flow",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 327,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click shell completion startup handling",
+                "shell_complete completion mechanism"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "impact-make-context",
+            "kind": "impact",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1830,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Command.make_context"
+              ],
+              "rewritten_queries": [
+                "Command.make_context callers",
+                "Command.make_context usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "impact-get-default",
+            "kind": "impact",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.6666666666666666,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1967,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Parameter.get_default"
+              ],
+              "rewritten_queries": [
+                "Parameter.get_default callers",
+                "Parameter.get_default usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          }
+        ]
+      },
+      "bm25_only": {
+        "description": "BM25 only, over every query and field (no vectors)",
+        "summary": {
+          "cases": 25,
+          "all_gold_in_context": 0.68,
+          "candidate_recall": 0.5733,
+          "context_chunks": 12.08,
+          "context_lines": 1092.28,
+          "context_recall": 0.7533,
+          "reciprocal_rank": 0.4633,
+          "reranked_recall": 0.5267
+        },
+        "by_kind": {
+          "architecture": {
+            "cases": 1,
+            "all_gold_in_context": 0.0,
+            "candidate_recall": 0.0,
+            "context_chunks": 11.0,
+            "context_lines": 1876.0,
+            "context_recall": 0.0,
+            "reciprocal_rank": 0.0,
+            "reranked_recall": 0.0
+          },
+          "behaviour": {
+            "cases": 15,
+            "all_gold_in_context": 0.7333,
+            "candidate_recall": 0.5667,
+            "context_chunks": 12.2667,
+            "context_lines": 1154.0,
+            "context_recall": 0.7667,
+            "reciprocal_rank": 0.4556,
+            "reranked_recall": 0.5667
+          },
+          "call_flow": {
+            "cases": 4,
+            "all_gold_in_context": 0.75,
+            "candidate_recall": 0.9167,
+            "context_chunks": 12.75,
+            "context_lines": 940.5,
+            "context_recall": 0.8333,
+            "reciprocal_rank": 0.4375,
+            "reranked_recall": 0.625
+          },
+          "impact": {
+            "cases": 2,
+            "all_gold_in_context": 1.0,
+            "candidate_recall": 0.3333,
+            "context_chunks": 12.5,
+            "context_lines": 739.5,
+            "context_recall": 1.0,
+            "reciprocal_rank": 0.5,
+            "reranked_recall": 0.3333
+          },
+          "lookup": {
+            "cases": 3,
+            "all_gold_in_context": 0.3333,
+            "candidate_recall": 0.5,
+            "context_chunks": 10.3333,
+            "context_lines": 960.0,
+            "context_recall": 0.6667,
+            "reciprocal_rank": 0.6667,
+            "reranked_recall": 0.5
+          }
+        },
+        "cases": [
+          {
+            "id": "standalone-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1011,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "standalone_mode",
+                "Command.main"
+              ],
+              "rewritten_queries": [
+                "Command.main standalone_mode"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "script-entry",
+            "kind": "call_flow",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.6666666666666666,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 14,
+            "context_lines": 2359,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click command call invocation function",
+                "class Command __call__ execution"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "ctx-invoke-command",
+            "kind": "behaviour",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 13,
+            "context_lines": 2471,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Context.invoke",
+                "Command"
+              ],
+              "rewritten_queries": [
+                "Context.invoke Command parameter resolution",
+                "Context invoke handle Command arguments"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "ctx-forward",
+            "kind": "behaviour",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1012,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Context.forward",
+                "Context.invoke"
+              ],
+              "rewritten_queries": [
+                "Context.forward Context.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "group-dispatch",
+            "kind": "call_flow",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 4,
+            "reciprocal_rank": 0.25,
+            "context_chunks": 13,
+            "context_lines": 857,
+            "missing": [
+              "src/click/core.py::Group.resolve_command",
+              "src/click/core.py::Group.get_command"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group find and run subcommand",
+                "Group parse command line subcommand execution"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "chain-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 1070,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group chain mode subcommands execution",
+                "Group result callback arguments"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "unknown-subcommand",
+            "kind": "behaviour",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 11,
+            "context_lines": 1430,
+            "missing": [
+              "src/click/core.py::Group.resolve_command",
+              "src/click/exceptions.py::NoSuchCommand"
+            ],
+            "plan": {
+              "query_type": "bug_analysis",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "subcommand not found error handling",
+                "unknown subcommand cli parser"
+              ]
+            },
+            "strategy": "hybrid",
+            "errors": []
+          },
+          {
+            "id": "value-precedence",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 14,
+            "context_lines": 2696,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "click"
+              ],
+              "rewritten_queries": [
+                "click parameter value fallback order command line",
+                "click context option default value lookup"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "auto-envvar",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 704,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "auto_envvar_prefix"
+              ],
+              "rewritten_queries": [
+                "auto_envvar_prefix environment variable name",
+                "auto_envvar_prefix implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "prompt-when",
+            "kind": "behaviour",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 2182,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "option prompt user value",
+                "prompt for value option implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "flag-without-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1256,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "flag option value default boolean"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "process-value",
+            "kind": "behaviour",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 14,
+            "context_lines": 553,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "simple",
+              "symbols": [
+                "Parameter.process_value"
+              ],
+              "rewritten_queries": [
+                "Parameter.process_value implementation"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "lookup-default",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1255,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "default_map"
+              ],
+              "rewritten_queries": [
+                "default_map callable default handling",
+                "context read default default_map"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "parsing-to-callback",
+            "kind": "architecture",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 11,
+            "context_lines": 1876,
+            "missing": [
+              "src/click/core.py::Command.parse_args",
+              "src/click/core.py::Parameter.handle_parse_result",
+              "src/click/parser.py::_OptionParser.parse_args"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "command line parsing callback keyword arguments",
+                "command invocation parameter binding"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "find-ensure-object",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 9,
+            "context_lines": 895,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "find_object",
+                "ensure_object"
+              ],
+              "rewritten_queries": [
+                "find_object implementation",
+                "ensure_object context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "pass-decorator",
+            "kind": "call_flow",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 186,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "make_pass_decorator"
+              ],
+              "rewritten_queries": [
+                "make_pass_decorator implementation",
+                "pass_decorator object lookup context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "current-context",
+            "kind": "lookup",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 868,
+            "missing": [
+              "src/click/core.py::Context.__enter__"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "get_current_context"
+              ],
+              "rewritten_queries": [
+                "get_current_context active context implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "context-close",
+            "kind": "behaviour",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 10,
+            "context_lines": 928,
+            "missing": [
+              "src/click/core.py::Context.__exit__",
+              "src/click/core.py::Context.close"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "context close callbacks execution",
+                "close callbacks run"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "intrange-clamp",
+            "kind": "behaviour",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 9,
+            "context_lines": 455,
+            "missing": [
+              "src/click/types.py::_NumberRangeBase.convert"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "IntRange"
+              ],
+              "rewritten_queries": [
+                "IntRange clamp True",
+                "IntRange out of range clamp"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "choice-case-insensitive",
+            "kind": "behaviour",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 9,
+            "context_lines": 343,
+            "missing": [
+              "src/click/types.py::Choice.normalize_choice"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Choice",
+                "case_sensitive"
+              ],
+              "rewritten_queries": [
+                "Choice case_sensitive comparison",
+                "Choice choices validation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "usage-error-show",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 304,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "UsageError"
+              ],
+              "rewritten_queries": [
+                "UsageError print message",
+                "class UsageError"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "cli-runner",
+            "kind": "lookup",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 9,
+            "context_lines": 757,
+            "missing": [
+              "src/click/testing.py::CliRunner.isolation"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "CliRunner.invoke"
+              ],
+              "rewritten_queries": [
+                "CliRunner.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "shell-completion",
+            "kind": "call_flow",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 6,
+            "reciprocal_rank": 0.16666666666666666,
+            "context_chunks": 14,
+            "context_lines": 360,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click shell completion startup handling",
+                "shell_complete completion mechanism"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "impact-make-context",
+            "kind": "impact",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 11,
+            "context_lines": 974,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Command.make_context"
+              ],
+              "rewritten_queries": [
+                "Command.make_context callers",
+                "Command.make_context usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "impact-get-default",
+            "kind": "impact",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.6666666666666666,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 505,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Parameter.get_default"
+              ],
+              "rewritten_queries": [
+                "Parameter.get_default callers",
+                "Parameter.get_default usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          }
+        ]
+      },
+      "no_rerank": {
+        "description": "No cross-encoder: the first fused search results are kept",
+        "summary": {
+          "cases": 25,
+          "all_gold_in_context": 0.72,
+          "candidate_recall": 0.7333,
+          "context_chunks": 11.4,
+          "context_lines": 690.8,
+          "context_recall": 0.7933,
+          "reciprocal_rank": 0.5734,
+          "reranked_recall": 0.7333
+        },
+        "by_kind": {
+          "architecture": {
+            "cases": 1,
+            "all_gold_in_context": 0.0,
+            "candidate_recall": 0.3333,
+            "context_chunks": 13.0,
+            "context_lines": 677.0,
+            "context_recall": 0.3333,
+            "reciprocal_rank": 0.125,
+            "reranked_recall": 0.3333
+          },
+          "behaviour": {
+            "cases": 15,
+            "all_gold_in_context": 0.8667,
+            "candidate_recall": 0.9,
+            "context_chunks": 11.2667,
+            "context_lines": 632.6,
+            "context_recall": 0.9,
+            "reciprocal_rank": 0.5473,
+            "reranked_recall": 0.9
+          },
+          "call_flow": {
+            "cases": 4,
+            "all_gold_in_context": 0.5,
+            "candidate_recall": 0.375,
+            "context_chunks": 11.0,
+            "context_lines": 618.5,
+            "context_recall": 0.5,
+            "reciprocal_rank": 0.375,
+            "reranked_recall": 0.375
+          },
+          "impact": {
+            "cases": 2,
+            "all_gold_in_context": 1.0,
+            "candidate_recall": 0.5,
+            "context_chunks": 13.0,
+            "context_lines": 1489.5,
+            "context_recall": 1.0,
+            "reciprocal_rank": 1.0,
+            "reranked_recall": 0.5
+          },
+          "lookup": {
+            "cases": 3,
+            "all_gold_in_context": 0.3333,
+            "candidate_recall": 0.6667,
+            "context_chunks": 11.0,
+            "context_lines": 550.3333,
+            "context_recall": 0.6667,
+            "reciprocal_rank": 0.8333,
+            "reranked_recall": 0.6667
+          }
+        },
+        "cases": [
+          {
+            "id": "standalone-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 553,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "standalone_mode",
+                "Command.main"
+              ],
+              "rewritten_queries": [
+                "Command.main standalone_mode"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "script-entry",
+            "kind": "call_flow",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 8,
+            "context_lines": 1123,
+            "missing": [
+              "src/click/core.py::Command.__call__",
+              "src/click/core.py::Command.main",
+              "src/click/core.py::Command.make_context"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click command call invocation function",
+                "class Command __call__ execution"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "ctx-invoke-command",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 6,
+            "reciprocal_rank": 0.16666666666666666,
+            "context_chunks": 14,
+            "context_lines": 1423,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Context.invoke",
+                "Command"
+              ],
+              "rewritten_queries": [
+                "Context.invoke Command parameter resolution",
+                "Context invoke handle Command arguments"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "ctx-forward",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 6,
+            "reciprocal_rank": 0.16666666666666666,
+            "context_chunks": 14,
+            "context_lines": 513,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Context.forward",
+                "Context.invoke"
+              ],
+              "rewritten_queries": [
+                "Context.forward Context.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "group-dispatch",
+            "kind": "call_flow",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 11,
+            "context_lines": 781,
+            "missing": [
+              "src/click/core.py::Group.invoke",
+              "src/click/core.py::Group.resolve_command",
+              "src/click/core.py::Group.get_command"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group find and run subcommand",
+                "Group parse command line subcommand execution"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "chain-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 7,
+            "reciprocal_rank": 0.14285714285714285,
+            "context_chunks": 12,
+            "context_lines": 849,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group chain mode subcommands execution",
+                "Group result callback arguments"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "unknown-subcommand",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 14,
+            "context_lines": 935,
+            "missing": [],
+            "plan": {
+              "query_type": "bug_analysis",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "subcommand not found error handling",
+                "unknown subcommand cli parser"
+              ]
+            },
+            "strategy": "hybrid",
+            "errors": []
+          },
+          {
+            "id": "value-precedence",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 5,
+            "reciprocal_rank": 0.2,
+            "context_chunks": 12,
+            "context_lines": 1339,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "click"
+              ],
+              "rewritten_queries": [
+                "click parameter value fallback order command line",
+                "click context option default value lookup"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "auto-envvar",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 349,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "auto_envvar_prefix"
+              ],
+              "rewritten_queries": [
+                "auto_envvar_prefix environment variable name",
+                "auto_envvar_prefix implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "prompt-when",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 14,
+            "context_lines": 1317,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "option prompt user value",
+                "prompt for value option implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "flag-without-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 12,
+            "context_lines": 1186,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "flag option value default boolean"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "process-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 5,
+            "reciprocal_rank": 0.2,
+            "context_chunks": 9,
+            "context_lines": 247,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "simple",
+              "symbols": [
+                "Parameter.process_value"
+              ],
+              "rewritten_queries": [
+                "Parameter.process_value implementation"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "lookup-default",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 505,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "default_map"
+              ],
+              "rewritten_queries": [
+                "default_map callable default handling",
+                "context read default default_map"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "parsing-to-callback",
+            "kind": "architecture",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 8,
+            "reciprocal_rank": 0.125,
+            "context_chunks": 13,
+            "context_lines": 677,
+            "missing": [
+              "src/click/core.py::Command.parse_args",
+              "src/click/core.py::Parameter.handle_parse_result"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "command line parsing callback keyword arguments",
+                "command invocation parameter binding"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "find-ensure-object",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 156,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "find_object",
+                "ensure_object"
+              ],
+              "rewritten_queries": [
+                "find_object implementation",
+                "ensure_object context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "pass-decorator",
+            "kind": "call_flow",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 11,
+            "context_lines": 189,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "make_pass_decorator"
+              ],
+              "rewritten_queries": [
+                "make_pass_decorator implementation",
+                "pass_decorator object lookup context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "current-context",
+            "kind": "lookup",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 102,
+            "missing": [
+              "src/click/core.py::Context.__enter__"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "get_current_context"
+              ],
+              "rewritten_queries": [
+                "get_current_context active context implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "context-close",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 96,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "context close callbacks execution",
+                "close callbacks run"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "intrange-clamp",
+            "kind": "behaviour",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 8,
+            "context_lines": 84,
+            "missing": [
+              "src/click/types.py::_NumberRangeBase.convert"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "IntRange"
+              ],
+              "rewritten_queries": [
+                "IntRange clamp True",
+                "IntRange out of range clamp"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "choice-case-insensitive",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 10,
+            "context_lines": 297,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Choice",
+                "case_sensitive"
+              ],
+              "rewritten_queries": [
+                "Choice case_sensitive comparison",
+                "Choice choices validation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "usage-error-show",
+            "kind": "behaviour",
+            "candidate_recall": 0.0,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 8,
+            "context_lines": 145,
+            "missing": [
+              "src/click/exceptions.py::UsageError.show"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "UsageError"
+              ],
+              "rewritten_queries": [
+                "UsageError print message",
+                "class UsageError"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "cli-runner",
+            "kind": "lookup",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 1044,
+            "missing": [
+              "src/click/testing.py::CliRunner.isolation"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "CliRunner.invoke"
+              ],
+              "rewritten_queries": [
+                "CliRunner.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "shell-completion",
+            "kind": "call_flow",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 14,
+            "context_lines": 381,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click shell completion startup handling",
+                "shell_complete completion mechanism"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "impact-make-context",
+            "kind": "impact",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1824,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Command.make_context"
+              ],
+              "rewritten_queries": [
+                "Command.make_context callers",
+                "Command.make_context usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "impact-get-default",
+            "kind": "impact",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.6666666666666666,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 13,
+            "context_lines": 1155,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Parameter.get_default"
+              ],
+              "rewritten_queries": [
+                "Parameter.get_default callers",
+                "Parameter.get_default usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          }
+        ]
+      },
+      "no_graph_expansion": {
+        "description": "The graph step adds no extra code to the context",
+        "summary": {
+          "cases": 25,
+          "all_gold_in_context": 0.64,
+          "candidate_recall": 0.88,
+          "context_chunks": 8.0,
+          "context_lines": 788.36,
+          "context_recall": 0.7867,
+          "reciprocal_rank": 0.749,
+          "reranked_recall": 0.7467
+        },
+        "by_kind": {
+          "architecture": {
+            "cases": 1,
+            "all_gold_in_context": 0.0,
+            "candidate_recall": 0.6667,
+            "context_chunks": 8.0,
+            "context_lines": 1855.0,
+            "context_recall": 0.0,
+            "reciprocal_rank": 0.0,
+            "reranked_recall": 0.0
+          },
+          "behaviour": {
+            "cases": 15,
+            "all_gold_in_context": 0.8,
+            "candidate_recall": 1.0,
+            "context_chunks": 8.0,
+            "context_lines": 729.4667,
+            "context_recall": 0.9,
+            "reciprocal_rank": 0.7944,
+            "reranked_recall": 0.9
+          },
+          "call_flow": {
+            "cases": 4,
+            "all_gold_in_context": 0.25,
+            "candidate_recall": 0.625,
+            "context_chunks": 8.0,
+            "context_lines": 548.75,
+            "context_recall": 0.5417,
+            "reciprocal_rank": 0.5774,
+            "reranked_recall": 0.5417
+          },
+          "impact": {
+            "cases": 2,
+            "all_gold_in_context": 1.0,
+            "candidate_recall": 0.6667,
+            "context_chunks": 8.0,
+            "context_lines": 1366.5,
+            "context_recall": 1.0,
+            "reciprocal_rank": 1.0,
+            "reranked_recall": 0.5
+          },
+          "lookup": {
+            "cases": 3,
+            "all_gold_in_context": 0.3333,
+            "candidate_recall": 0.8333,
+            "context_chunks": 8.0,
+            "context_lines": 661.3333,
+            "context_recall": 0.6667,
+            "reciprocal_rank": 0.8333,
+            "reranked_recall": 0.6667
+          }
+        },
+        "cases": [
+          {
+            "id": "standalone-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 433,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "standalone_mode",
+                "Command.main"
+              ],
+              "rewritten_queries": [
+                "Command.main standalone_mode"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "script-entry",
+            "kind": "call_flow",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 6,
+            "reciprocal_rank": 0.16666666666666666,
+            "context_chunks": 8,
+            "context_lines": 1083,
+            "missing": [
+              "src/click/core.py::Command.__call__",
+              "src/click/core.py::Command.make_context"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click command call invocation function",
+                "class Command __call__ execution"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "ctx-invoke-command",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 1074,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Context.invoke",
+                "Command"
+              ],
+              "rewritten_queries": [
+                "Context.invoke Command parameter resolution",
+                "Context invoke handle Command arguments"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "ctx-forward",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 239,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Context.forward",
+                "Context.invoke"
+              ],
+              "rewritten_queries": [
+                "Context.forward Context.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "group-dispatch",
+            "kind": "call_flow",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 0.3333333333333333,
+            "all_gold_in_context": false,
+            "first_gold_rank": 7,
+            "reciprocal_rank": 0.14285714285714285,
+            "context_chunks": 8,
+            "context_lines": 703,
+            "missing": [
+              "src/click/core.py::Group.resolve_command",
+              "src/click/core.py::Group.get_command"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group find and run subcommand",
+                "Group parse command line subcommand execution"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "chain-mode",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 8,
+            "context_lines": 681,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [
+                "Group"
+              ],
+              "rewritten_queries": [
+                "Group chain mode subcommands execution",
+                "Group result callback arguments"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "unknown-subcommand",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 755,
+            "missing": [
+              "src/click/core.py::Group.resolve_command"
+            ],
+            "plan": {
+              "query_type": "bug_analysis",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "subcommand not found error handling",
+                "unknown subcommand cli parser"
+              ]
+            },
+            "strategy": "hybrid",
+            "errors": []
+          },
+          {
+            "id": "value-precedence",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 4,
+            "reciprocal_rank": 0.25,
+            "context_chunks": 8,
+            "context_lines": 1847,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "click"
+              ],
+              "rewritten_queries": [
+                "click parameter value fallback order command line",
+                "click context option default value lookup"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "auto-envvar",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 1059,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "auto_envvar_prefix"
+              ],
+              "rewritten_queries": [
+                "auto_envvar_prefix environment variable name",
+                "auto_envvar_prefix implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "prompt-when",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 1159,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "option prompt user value",
+                "prompt for value option implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "flag-without-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 1084,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "flag option value default boolean"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "process-value",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 1070,
+            "missing": [],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "simple",
+              "symbols": [
+                "Parameter.process_value"
+              ],
+              "rewritten_queries": [
+                "Parameter.process_value implementation"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "lookup-default",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 1113,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "default_map"
+              ],
+              "rewritten_queries": [
+                "default_map callable default handling",
+                "context read default default_map"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "parsing-to-callback",
+            "kind": "architecture",
+            "candidate_recall": 0.6666666666666666,
+            "reranked_recall": 0.0,
+            "context_recall": 0.0,
+            "all_gold_in_context": false,
+            "first_gold_rank": null,
+            "reciprocal_rank": 0.0,
+            "context_chunks": 8,
+            "context_lines": 1855,
+            "missing": [
+              "src/click/core.py::Command.parse_args",
+              "src/click/core.py::Parameter.handle_parse_result",
+              "src/click/parser.py::_OptionParser.parse_args"
+            ],
+            "plan": {
+              "query_type": "call_flow",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "command line parsing callback keyword arguments",
+                "command invocation parameter binding"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "find-ensure-object",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 898,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "find_object",
+                "ensure_object"
+              ],
+              "rewritten_queries": [
+                "find_object implementation",
+                "ensure_object context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "pass-decorator",
+            "kind": "call_flow",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 145,
+            "missing": [
+              "src/click/core.py::Context.find_object"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [
+                "make_pass_decorator"
+              ],
+              "rewritten_queries": [
+                "make_pass_decorator implementation",
+                "pass_decorator object lookup context"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "current-context",
+            "kind": "lookup",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 105,
+            "missing": [
+              "src/click/core.py::Context.__enter__"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "get_current_context"
+              ],
+              "rewritten_queries": [
+                "get_current_context active context implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "context-close",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 125,
+            "missing": [
+              "src/click/core.py::Context.__exit__"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [],
+              "rewritten_queries": [
+                "context close callbacks execution",
+                "close callbacks run"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "intrange-clamp",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 8,
+            "context_lines": 122,
+            "missing": [
+              "src/click/types.py::_NumberRangeBase.convert"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "IntRange"
+              ],
+              "rewritten_queries": [
+                "IntRange clamp True",
+                "IntRange out of range clamp"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "choice-case-insensitive",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 3,
+            "reciprocal_rank": 0.3333333333333333,
+            "context_chunks": 8,
+            "context_lines": 245,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "Choice",
+                "case_sensitive"
+              ],
+              "rewritten_queries": [
+                "Choice case_sensitive comparison",
+                "Choice choices validation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "usage-error-show",
+            "kind": "behaviour",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 8,
+            "context_lines": 151,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "UsageError"
+              ],
+              "rewritten_queries": [
+                "UsageError print message",
+                "class UsageError"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "cli-runner",
+            "kind": "lookup",
+            "candidate_recall": 0.5,
+            "reranked_recall": 0.5,
+            "context_recall": 0.5,
+            "all_gold_in_context": false,
+            "first_gold_rank": 2,
+            "reciprocal_rank": 0.5,
+            "context_chunks": 8,
+            "context_lines": 766,
+            "missing": [
+              "src/click/testing.py::CliRunner.isolation"
+            ],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "simple",
+              "symbols": [
+                "CliRunner.invoke"
+              ],
+              "rewritten_queries": [
+                "CliRunner.invoke implementation"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "shell-completion",
+            "kind": "call_flow",
+            "candidate_recall": 1.0,
+            "reranked_recall": 1.0,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 264,
+            "missing": [],
+            "plan": {
+              "query_type": "implementation",
+              "complexity": "complex",
+              "symbols": [],
+              "rewritten_queries": [
+                "click shell completion startup handling",
+                "shell_complete completion mechanism"
+              ]
+            },
+            "strategy": "vector",
+            "errors": []
+          },
+          {
+            "id": "impact-make-context",
+            "kind": "impact",
+            "candidate_recall": 0.3333333333333333,
+            "reranked_recall": 0.3333333333333333,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 1623,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Command.make_context"
+              ],
+              "rewritten_queries": [
+                "Command.make_context callers",
+                "Command.make_context usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          },
+          {
+            "id": "impact-get-default",
+            "kind": "impact",
+            "candidate_recall": 1.0,
+            "reranked_recall": 0.6666666666666666,
+            "context_recall": 1.0,
+            "all_gold_in_context": true,
+            "first_gold_rank": 1,
+            "reciprocal_rank": 1.0,
+            "context_chunks": 8,
+            "context_lines": 1110,
+            "missing": [],
+            "plan": {
+              "query_type": "impact",
+              "complexity": "complex",
+              "symbols": [
+                "Parameter.get_default"
+              ],
+              "rewritten_queries": [
+                "Parameter.get_default callers",
+                "Parameter.get_default usage"
+              ]
+            },
+            "strategy": "graph",
+            "errors": []
+          }
+        ]
+      }
+    }
+  }
+}

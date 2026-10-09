@@ -28,9 +28,20 @@ def _out_path(args: argparse.Namespace, mode: str) -> Path:
     return runner.RESULTS / f"{args.dataset}-{mode}-{datetime.now(UTC):%Y%m%d-%H%M}.json"
 
 
+def compact(run: dict) -> dict:
+    """A run without each case's retrieved hits: what a committed baseline needs to compare."""
+    out = json.loads(json.dumps(run, default=str))
+    for variant in out.get("retrieval", {}).get("variants", {}).values():
+        for case in variant["cases"]:
+            case.pop("stages", None)
+    return out
+
+
 def _write(run: dict, path: Path, baseline: str | None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(run, indent=2, default=str) + "\n")
+    # Baselines are committed, so they keep scores and plans but not every retrieved hit.
+    saved = compact(run) if path.resolve().parent == (runner.ROOT / "baselines").resolve() else run
+    path.write_text(json.dumps(saved, indent=2, default=str) + "\n")
     base = json.loads(Path(baseline).read_text()) if baseline else None
     text = report.markdown(run, base)
     path.with_suffix(".md").write_text(text)
