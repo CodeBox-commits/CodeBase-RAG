@@ -14,7 +14,7 @@ x-logging: &logging
     max-file: "3"
 
 x-app: &app
-  image: ${IMAGE:-ghcr.io/codebox-commits/git-rag-project}:${TAG:-main}
+  image: ${IMAGE:-ghcr.io/codebox-commits/codebase-rag}:${TAG:-main}
   restart: unless-stopped
   logging: *logging
   networks: [internal, egress]

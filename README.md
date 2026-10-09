@@ -4,7 +4,7 @@
 
 **Ask questions about any Python, JavaScript or TypeScript repository.<br>Get answers that cite the file and line, and every citation is checked.**
 
-[![CI](https://github.com/CodeBox-commits/git-rag-project/actions/workflows/ci.yml/badge.svg)](https://github.com/CodeBox-commits/git-rag-project/actions/workflows/ci.yml)
+[![CI](https://github.com/CodeBox-commits/CodeBase-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/CodeBox-commits/CodeBase-RAG/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?logo=python&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-React%2019-3178c6?logo=typescript&logoColor=white)
 ![MCP server](https://img.shields.io/badge/MCP-server-b18cff)
@@ -63,8 +63,8 @@ You need Docker and a free [Google AI Studio](https://aistudio.google.com/) API 
 questions; indexing runs fully locally.
 
 ```bash
-git clone https://github.com/CodeBox-commits/git-rag-project.git
-cd git-rag-project
+git clone https://github.com/CodeBox-commits/CodeBase-RAG.git
+cd CodeBase-RAG
 cp backend/.env.example backend/.env    # then set GEMINI_API_KEY
 docker compose up -d --build
 ```

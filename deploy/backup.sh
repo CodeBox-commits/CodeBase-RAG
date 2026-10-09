@@ -4,7 +4,7 @@
 # Writers (api, worker) and databases are stopped while the volumes are archived, so
 # Neo4j, Qdrant and Redis are captured at the same moment and agree with each other.
 # Expect ~1 minute of downtime. Run from the repo root, e.g. nightly via cron:
-#   0 3 * * * cd /opt/git-rag-project && deploy/backup.sh >> /var/log/gitrag-backup.log 2>&1
+#   0 3 * * * cd /opt/codebase-rag && deploy/backup.sh >> /var/log/gitrag-backup.log 2>&1
 set -euo pipefail
 
 COMPOSE_FILE=${COMPOSE_FILE:-deploy/docker-compose.prod.yml}
