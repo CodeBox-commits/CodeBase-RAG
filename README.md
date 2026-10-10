@@ -142,7 +142,8 @@ Indexing runs in a Celery worker, so the UI never blocks:
 
 Measured with the [evaluation harness](backend/eval/) on 28 hand-labelled questions about
 [`pallets/click`](https://github.com/pallets/click): each names the code a correct answer depends on.
-Retrieval runs make no model calls (the planner's output is recorded), so anyone can reproduce them.
+Retrieval runs make no model calls (the planner's output is recorded), so anyone can reproduce them;
+answer runs ask Gemini once or twice per question.
 
 | How much of the right code… | |
 |---|---|
@@ -161,6 +162,15 @@ What each stage adds, measured by switching it off:
 | Query planner | 81% | 68% | 75% |
 | Cross-encoder reranker | 79% | 72% | 57% |
 | Vectors (BM25 only) | 75% | 68% | 46% |
+
+Answers, from one run with `gemini-3.5-flash-lite`:
+
+| Citations backed by the code shown | Cites the right code | Expected facts stated | "Not there" when it isn't there | "Not there" when it is |
+|---|---|---|---|---|
+| 100% | 92% | 85% | 3 of 3 | 0 of 25 |
+
+Answers track retrieval: when all the right code reached the model, answers stated 95% of the
+expected facts; when some of it didn't, 60%.
 
 With 25 answerable questions, one question is 4 points, so small differences are noise. The weak
 spot is code that connects steps rather than doing the work (`Command.parse_args`,

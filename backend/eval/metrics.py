@@ -75,15 +75,25 @@ def _lines(hit: Hit) -> int:
 
 # --- answers -------------------------------------------------------------------------------
 
-_ABSTAIN = re.compile(
-    r"(isn'?t|is not|aren'?t|are not|wasn'?t|was not|not)\s+(?:\w+\s+){0,3}"
-    r"(in|present|included|shown|found|available|provided|defined|implemented|contain)"
-    r"|no (code|information|mention|definition|implementation|evidence|such)"
-    r"|does(?:n'?t| not) (contain|include|show|define|mention|appear|exist|implement|have)"
-    r"|(not|cannot|can'?t) (be )?(determine|answer|find|confirm|see)"
-    r"|insufficient|not enough (information|context)",
+# An abstention says, up front, that the context lacks what was asked: "Based on the provided
+# context, there is no implementation of ...". Negations elsewhere are ordinary technical prose
+# ("parameters not already in kwargs") or caveats ("dynamic calls are not listed"), so only the
+# opening sentences count, and only when they talk about the context itself.
+_ABOUT_CONTEXT = re.compile(
+    r"\b(provided|given|shown|retrieved|available|supplied)\s+(context|code|snippets?|codebase|repository|graph)"
+    r"|\b(the|this)\s+(context|snippets|codebase)\b",
     re.IGNORECASE,
 )
+_LACKS = re.compile(
+    r"\b(does|do|did)(n'?t| not)\s+(contain|include|show|mention|implement|define|provide|have|cover|describe)"
+    r"|\bthere (is|are) no\b"
+    r"|\bno (implementation|mention|code|information|logic|definition|evidence|reference)"
+    r"|\b(is|are) not (implemented|present|included|shown|defined|mentioned|available|covered)"
+    r"|\b(cannot|can'?t|unable to) (be )?(determine|answer|find|confirm)"
+    r"|\bnot enough (information|context)",
+    re.IGNORECASE,
+)
+_OPENING_SENTENCES = 2
 
 
 def mention_score(case: Case, answer: str) -> float | None:
@@ -95,8 +105,10 @@ def mention_score(case: Case, answer: str) -> float | None:
 
 
 def abstained(answer: str) -> bool:
-    """Whether the answer says the code or information isn't there (heuristic, English only)."""
-    return bool(_ABSTAIN.search(answer))
+    """Whether the answer opens by saying the code isn't in the context (heuristic, English only)."""
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", answer.strip())
+    opening = [s for s in sentences if s.strip()][:_OPENING_SENTENCES]
+    return any(_ABOUT_CONTEXT.search(s) and _LACKS.search(s) for s in opening)
 
 
 def cites_gold(citations: Sequence[Mapping[str, Any]], gold_spans: Sequence[Mapping[str, Any]]) -> bool:

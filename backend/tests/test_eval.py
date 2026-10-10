@@ -64,7 +64,7 @@ def test_mentions_accept_any_phrasing_and_ignore_case():
     "text",
     [
         "The provided context doesn't contain any HTTP code.",
-        "There is no code that parses YAML here.",
+        "Based on the provided context, there is no implementation of an HTTP download.",
         "This isn't in the shown code, so I can't confirm it.",
     ],
 )
@@ -72,8 +72,18 @@ def test_abstentions_are_recognised(text):
     assert metrics.abstained(text)
 
 
-def test_a_plain_answer_is_not_an_abstention():
-    assert not metrics.abstained("Command.main creates the context and calls invoke (`core.py:1580`).")
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Command.main creates the context and calls invoke (`core.py:1580`).",
+        # Ordinary negations in an answer that does answer (seen in real answers).
+        "Defaults are filled for parameters that are not already present in `kwargs`.",
+        "If it does not exist (`rv is None`), it creates a new instance of `object_type`.",
+        "It resolves the command.\n\n*(Note: dynamic calls that can't be resolved statically are not listed.)*",
+    ],
+)
+def test_answers_that_answer_are_not_abstentions(text):
+    assert not metrics.abstained(text)
 
 
 def test_answer_scores():
