@@ -8,7 +8,7 @@ rehearsed locally; hosting is chosen later (see "Going live").
 ```
 PR ──► CI (lint · types · unit · integration · frontend · docker · deploy-config · security)
           │ merge
-main ──► CI ──(green)──► Release: image ghcr.io/codebox-commits/git-rag-project
+main ──► CI ──(green)──► Release: image ghcr.io/codebox-commits/codebase-rag
                                    tags: sha-<short>, main      (needs PUSH_IMAGES=true)
 tag v1.2.3 ────────────► Release: + tags 1.2.3, 1.2 and a GitHub Release with notes
 ```
@@ -61,8 +61,8 @@ but not to the internet, and nothing outside can reach them.
 
 ```bash
 # on the server (Docker + Compose plugin installed), as a non-root deploy user
-git clone https://github.com/CodeBox-commits/git-rag-project.git /opt/git-rag-project
-cd /opt/git-rag-project
+git clone https://github.com/CodeBox-commits/CodeBase-RAG.git /opt/codebase-rag
+cd /opt/codebase-rag
 cp deploy/.env.example deploy/.env
 # edit deploy/.env: DOMAIN, TAG, GEMINI_API_KEY, and strong passwords and MCP token:
 openssl rand -hex 24
@@ -80,7 +80,7 @@ certificate. Open only ports 22, 80 and 443 in the firewall.
 ## Deploy a new version
 
 ```bash
-cd /opt/git-rag-project
+cd /opt/codebase-rag
 sed -i 's/^TAG=.*/TAG=sha-abc1234/' deploy/.env          # or 1.2.3
 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env pull api worker
 docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d api worker
@@ -110,7 +110,7 @@ deploy/backup.sh                       # -> backups/<UTC timestamp>/
 - Writes `SHA256SUMS` and `images.txt` (what was running). Keeps the newest 7
   (`KEEP=14 deploy/backup.sh` to change).
 - Nightly via cron:
-  `0 3 * * * cd /opt/git-rag-project && deploy/backup.sh >> /var/log/gitrag-backup.log 2>&1`
+  `0 3 * * * cd /opt/codebase-rag && deploy/backup.sh >> /var/log/gitrag-backup.log 2>&1`
 - Copy backups off the server (another region, object storage). A backup on the same
   disk doesn't survive losing the disk.
 

@@ -4,7 +4,7 @@
 
 **Ask questions about any Python, JavaScript or TypeScript repository.<br>Get answers that cite the file and line, and every citation is checked.**
 
-[![CI](https://github.com/CodeBox-commits/git-rag-project/actions/workflows/ci.yml/badge.svg)](https://github.com/CodeBox-commits/git-rag-project/actions/workflows/ci.yml)
+[![CI](https://github.com/CodeBox-commits/CodeBase-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/CodeBox-commits/CodeBase-RAG/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?logo=python&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-React%2019-3178c6?logo=typescript&logoColor=white)
 ![MCP server](https://img.shields.io/badge/MCP-server-b18cff)
@@ -63,8 +63,8 @@ You need Docker and a free [Google AI Studio](https://aistudio.google.com/) API 
 questions; indexing runs fully locally.
 
 ```bash
-git clone https://github.com/CodeBox-commits/git-rag-project.git
-cd git-rag-project
+git clone https://github.com/CodeBox-commits/CodeBase-RAG.git
+cd CodeBase-RAG
 cp backend/.env.example backend/.env    # then set GEMINI_API_KEY
 docker compose up -d --build
 ```
@@ -137,6 +137,36 @@ Indexing runs in a Celery worker, so the UI never blocks:
    they're ready, so the repository never goes empty; then re-link every call and inheritance edge. A file that fails
    keeps its old data and is retried next run. `"full": true`, or a parser change (`INDEX_VERSION`), rebuilds
    everything.
+
+## Quality
+
+Measured with the [evaluation harness](backend/eval/) on 28 hand-labelled questions about
+[`pallets/click`](https://github.com/pallets/click): each names the code a correct answer depends on.
+Retrieval runs make no model calls (the planner's output is recorded), so anyone can reproduce them.
+
+| How much of the right code… | |
+|---|---|
+| is found by search (24 candidates) | 88% |
+| survives reranking (top 8) | 75% |
+| reaches the model, after graph expansion | **83%** |
+| reaches the model completely, for every question | 72% |
+
+What each stage adds, measured by switching it off:
+
+| Without | Right code reaching the model | Questions with all of it | First right hit (MRR) |
+|---|---|---|---|
+| Nothing (full pipeline) | 83% | 72% | 75% |
+| Graph expansion | 79% | 64% | 75% |
+| BM25 (vectors only) | 79% | 68% | 75% |
+| Query planner | 81% | 68% | 75% |
+| Cross-encoder reranker | 79% | 72% | 57% |
+| Vectors (BM25 only) | 75% | 68% | 46% |
+
+With 25 answerable questions, one question is 4 points, so small differences are noise. The weak
+spot is code that connects steps rather than doing the work (`Command.parse_args`,
+`Context.__exit__`, `Group.resolve_command`): in 6 of the 7 questions missing some of it, search
+found it and the reranker's cut to 8 dropped it. Details and
+how to run it: [`backend/eval/README.md`](backend/eval/README.md).
 
 ## Tech stack
 
