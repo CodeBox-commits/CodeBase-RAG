@@ -155,7 +155,7 @@ id = "choice-case-insensitive"
 kind = "behaviour"
 question = "How does Choice compare the given value with its choices when case_sensitive is False?"
 gold = ["src/click/types.py::Choice.normalize_choice"]
-mention = [["casefold"], ["token_normalize_func"]]
+mention = [["casefold"], ["token_normalize_func", "token normaliz"]]
 
 [[case]]
 id = "usage-error-show"

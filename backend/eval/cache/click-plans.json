@@ -88,6 +88,17 @@
         "auto_envvar_prefix"
       ]
     },
+    "How does click download remote configuration over HTTP before running a command?": {
+      "complexity": "complex",
+      "queries": [
+        "click download remote configuration HTTP",
+        "click remote config loading"
+      ],
+      "query_type": "call_flow",
+      "symbols": [
+        "click"
+      ]
+    },
     "How does get_current_context know which context is the active one?": {
       "complexity": "simple",
       "queries": [
@@ -259,6 +270,27 @@
         "prompt for value option implementation"
       ],
       "query_type": "implementation",
+      "symbols": []
+    },
+    "Where does click parse YAML config files into default_map?": {
+      "complexity": "complex",
+      "queries": [
+        "click parse YAML config files default_map",
+        "click default_map configuration parsing"
+      ],
+      "query_type": "implementation",
+      "symbols": [
+        "click",
+        "default_map"
+      ]
+    },
+    "Which function starts the asyncio event loop for async command callbacks?": {
+      "complexity": "simple",
+      "queries": [
+        "asyncio event loop async command callbacks",
+        "start asyncio event loop command"
+      ],
+      "query_type": "symbol_lookup",
       "symbols": []
     }
   }
