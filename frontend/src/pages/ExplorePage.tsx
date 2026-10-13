@@ -302,8 +302,13 @@ export default function ExplorePage() {
           className="bg-sheet"
           aria-label="View"
         >
-          <ToggleGroupItem value="model" className="px-3">Model</ToggleGroupItem>
-          <ToggleGroupItem value="graph" className="px-3">Graph</ToggleGroupItem>
+          {(['model', 'graph'] as const).map((v) => (
+            <ToggleGroupItem key={v} value={v} className="relative px-3 capitalize data-[state=on]:bg-transparent">
+              {/* The highlight slides to the view you pick. */}
+              {view === v && <motion.span layoutId="explore-view" aria-hidden className="absolute inset-0 rounded-[inherit] bg-accent" transition={{ type: 'spring', stiffness: 520, damping: 42 }} />}
+              <span className="relative">{v}</span>
+            </ToggleGroupItem>
+          ))}
         </ToggleGroup>
         <label className="flex items-center">
           <span className="sr-only">Towers shown</span>

@@ -1,4 +1,5 @@
 import { Check, Compass, MessageSquareText, MoreHorizontal, RefreshCw, Trash2, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import {
@@ -125,12 +126,19 @@ function BuiltModel({ url }: { url: string }) {
   return <CodeCity nodes={nodes} edges={graph!.edges} controls={false} framing={1.05} className="h-72 sm:h-80" />
 }
 
-function RepoRow({ repo, active, onSelect, onUpdate, onRebuild, onDelete }: {
-  repo: Repo; active: boolean; onSelect: () => void; onUpdate: () => void; onRebuild: () => void; onDelete: () => void
+function RepoRow({ repo, index, active, onSelect, onUpdate, onRebuild, onDelete }: {
+  repo: Repo; index: number; active: boolean; onSelect: () => void; onUpdate: () => void; onRebuild: () => void; onDelete: () => void
 }) {
   const symbols = repo.result?.symbols ?? repo.symbols
   return (
-    <li className={cn('group flex items-center gap-1 rounded-lg pr-1 transition-colors', active ? 'bg-sheet ring-1 ring-rule' : 'hover:bg-sheet/70')}>
+    // Rows arrive one after another, new ones slide into place, and deleted ones slip out.
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index, 8) * 0.04, duration: 0.25 } }}
+      exit={{ opacity: 0, x: -12, transition: { duration: 0.15 } }}
+      className={cn('group flex items-center gap-1 rounded-lg pr-1 transition-colors', active ? 'bg-sheet ring-1 ring-rule' : 'hover:bg-sheet/70')}
+    >
       <button onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-left" aria-current={active || undefined}>
         <StatusDot state={repo.state} />
         <span className="min-w-0 flex-1">
@@ -156,7 +164,7 @@ function RepoRow({ repo, active, onSelect, onUpdate, onRebuild, onDelete }: {
           <DropdownMenuItem variant="destructive" onSelect={onDelete}><Trash2 /> Delete from the index</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </li>
+    </motion.li>
   )
 }
 
@@ -225,10 +233,12 @@ export default function IndexPage() {
           <p className="mt-2 text-sm text-muted-foreground">Repositories you index appear here, for everyone using this server.</p>
         ) : (
           <ul className="mt-2 space-y-1">
-            {repos.map((r) => (
+            <AnimatePresence initial>
+            {repos.map((r, i) => (
               <RepoRow
                 key={r.url}
                 repo={r}
+                index={i}
                 active={r.url === active?.url}
                 onSelect={() => setActive(r.url)}
                 onUpdate={() => submit(r.url)}
@@ -236,6 +246,7 @@ export default function IndexPage() {
                 onDelete={() => setDeleting(r.url)}
               />
             ))}
+            </AnimatePresence>
           </ul>
         )}
       </section>

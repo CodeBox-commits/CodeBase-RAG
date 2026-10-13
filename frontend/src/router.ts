@@ -9,10 +9,10 @@ function current(): Route {
   return (ROUTES as string[]).includes(path) ? (path as Route) : '/'
 }
 
+/** Goes to a page. The app scrolls to the top once the old page has faded out (App.tsx). */
 export function navigate(to: Route) {
   if (current() === to) return
   window.location.hash = to
-  window.scrollTo({ top: 0 })
 }
 
 export function useRoute(): Route {

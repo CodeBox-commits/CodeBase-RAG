@@ -1,4 +1,5 @@
 import { Check, ChevronsUpDown, Menu, Plus, Search } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
@@ -106,14 +107,18 @@ export default function Nav({ route, onOpenCommand }: { route: Route; onOpenComm
       href={`#${l.to}`}
       aria-current={route === l.to ? 'page' : undefined}
       onClick={(e) => { e.preventDefault(); go(l.to) }}
-      className={cn(
-        'relative rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
-        'aria-[current=page]:text-foreground',
-        // The current page is underlined with the thread, like the selected block in the model.
-        'after:absolute after:inset-x-3 after:-bottom-[13px] after:h-0.5 after:scale-x-0 after:bg-thread after:transition-transform aria-[current=page]:after:scale-x-100',
-      )}
+      className="relative rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:text-foreground"
     >
       {l.label}
+      {/* The current page is underlined with the thread, and the line glides to the page you pick. */}
+      {route === l.to && (
+        <motion.span
+          layoutId="nav-underline"
+          aria-hidden
+          className="absolute inset-x-3 -bottom-[13px] h-0.5 bg-thread"
+          transition={{ type: 'spring', stiffness: 520, damping: 42 }}
+        />
+      )}
     </a>
   ))
 
