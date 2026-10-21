@@ -1,9 +1,9 @@
-import { motion } from 'motion/react'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import CodeCity from '../components/CodeCity'
+import { Magnetic, RevealText, Rise, RiseGroup } from '../components/motion'
 import AnswerStory from '../home/AnswerStory'
 import PipelineStory from '../home/PipelineStory'
 import QualityBand from '../home/QualityBand'
@@ -127,24 +127,21 @@ export default function Home() {
           {/* Keeps the copy legible where towers run behind it. */}
           <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 hidden w-[58%] bg-gradient-to-r from-background via-background/80 to-transparent lg:block" />
           <div data-hero-copy className="relative z-10 flex flex-col justify-center px-4 pb-14 sm:px-6 lg:col-span-6 lg:pb-24 xl:col-span-5 xl:pl-10">
-            <motion.h1
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: [0.2, 0.7, 0.2, 1] }}
-              className="display text-[clamp(2.6rem,5vw,4.6rem)]"
-            >
-              Ask your codebase. Get the file and the line.
-            </motion.h1>
-            <p className="mt-6 max-w-[46ch] text-[1.06rem] leading-relaxed text-muted-foreground">
-              Index a Python, JavaScript or TypeScript repository. Every function and class becomes a glowing tower
-              in a city you can walk, every call a light arc between them, and every answer cites code you can open.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-2.5">
-              <Button size="lg" onClick={() => navigate('/index')}>Index a repository</Button>
-              <Button size="lg" variant="outline" className="bg-sheet" onClick={() => document.getElementById('answer')?.scrollIntoView({ behavior: 'smooth' })}>
-                See a checked answer
-              </Button>
-            </div>
+            <RevealText text="Ask your codebase. Get the file and the line." className="display text-[clamp(2.6rem,5vw,4.6rem)]" />
+            <RiseGroup delay={0.55}>
+              <Rise as="div">
+                <p className="mt-6 max-w-[46ch] text-[1.06rem] leading-relaxed text-muted-foreground">
+                  Index a Python, JavaScript or TypeScript repository. Every function and class becomes a glowing tower
+                  in a city you can walk, every call a light arc between them, and every answer cites code you can open.
+                </p>
+              </Rise>
+              <Rise className="mt-8 flex flex-wrap gap-2.5">
+                <Magnetic><Button size="lg" onClick={() => navigate('/index')}>Index a repository</Button></Magnetic>
+                <Button size="lg" variant="outline" className="bg-sheet" onClick={() => document.getElementById('answer')?.scrollIntoView({ behavior: 'smooth' })}>
+                  See a checked answer
+                </Button>
+              </Rise>
+            </RiseGroup>
           </div>
           <p className="relative z-10 px-4 pb-6 text-xs leading-relaxed text-muted-foreground sm:px-6 lg:absolute lg:bottom-6 lg:right-6 lg:max-w-sm lg:p-0 lg:text-right">
             A sample billing service as a city. Each tower is a{' '}
@@ -169,7 +166,7 @@ export default function Home() {
               Pick a tower and ask what depends on it: callers, subclasses and overrides, followed up to three calls back,
               grouped by file with the closest first.
             </p>
-            <div className="mt-6 rounded-xl border bg-background/50 p-5">
+            <div className="spotlight relative mt-6 rounded-xl border bg-background/50 p-5">
               <p className="text-sm">
                 Changing <code className="font-mono text-[0.85em]">InvoiceService._total</code> can affect{' '}
                 <strong className="display text-[1.5rem] text-thread">5</strong> symbols in{' '}
@@ -200,7 +197,7 @@ export default function Home() {
               The same lookups are tools for coding agents over MCP: search, definitions, callers and callees, impact, and
               cited answers. Everything except answers is an exact graph lookup, with no model calls.
             </p>
-            <div className="mt-6 overflow-hidden rounded-xl border bg-[#09080e] text-[#e9e8f0]">
+            <div className="spotlight relative mt-6 overflow-hidden rounded-xl border bg-[#09080e] text-[#e9e8f0]">
               <p className="border-b border-white/10 px-4 py-2.5 text-xs text-white/60">Add it to Claude Code</p>
               <pre className="overflow-x-auto px-4 py-4 font-mono text-[0.8rem] leading-relaxed">
                 <span className="text-white/45">$ </span>claude mcp add --transport http codebox http://localhost:8000/mcp

@@ -129,6 +129,16 @@ export default function Nav({ route, onOpenCommand }: { route: Route; onOpenComm
         scrolled || route !== '/' ? 'border-rule bg-background/90 backdrop-blur-md' : 'border-transparent bg-transparent',
       )}
     >
+      {/* A beam of light runs along the nav's edge each time the page changes. */}
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 -bottom-px h-[2px] overflow-hidden">
+        <motion.span
+          key={route}
+          className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-thread to-transparent shadow-[0_0_14px_var(--thread)]"
+          initial={{ x: '-100%', opacity: 1 }}
+          animate={{ x: '300%', opacity: [1, 1, 0] }}
+          transition={{ duration: 0.9, ease: [0.2, 0.7, 0.2, 1] }}
+        />
+      </span>
       <div className="mx-auto flex h-full max-w-[1600px] items-center gap-2 px-4 sm:px-6">
         <a
           href="#/"

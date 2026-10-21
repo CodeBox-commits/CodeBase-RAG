@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import { STATUS_LABEL } from '../citations'
 import CodeBlock from '../components/CodeBlock'
 import { CitationChip, StatusMark, type CitationTarget } from '../components/CodeViewer'
+import { Tilt } from '../components/motion'
 import { ANSWER, QUESTION, SAMPLE_CODE } from './sampleStory'
 import { answerProgress, bump, tokenizeAnswer } from './story'
 import { gsap, NAV, useScrollProgress, useScrollScene, useStoryMode } from './useScrollStory'
@@ -60,7 +61,8 @@ export default function AnswerStory() {
 
       <div className="grid gap-4 lg:col-span-7">
         <div data-arrive="answer">
-        <figure className="rounded-xl border bg-sheet p-5 sm:p-6">
+        <Tilt max={3}>
+        <figure className="spotlight relative rounded-xl border bg-sheet p-5 sm:p-6">
           <p className="text-sm font-medium">{QUESTION}</p>
           <div className="prose-answer mt-3">
             {answer.paragraphs.map((tokens, pi) => (
@@ -91,12 +93,13 @@ export default function AnswerStory() {
             <span className="tabular-nums">{doneCount} of {chips.length}</span> citations checked. A sample answer about the sample repository.
           </figcaption>
         </figure>
+        </Tilt>
         </div>
 
         <div data-arrive="code">
 
         <figure
-          className={cn('overflow-hidden rounded-xl border bg-sheet shadow-[0_30px_60px_-30px_rgb(0_0_0/0.8)] transition-shadow', viewing && 'ring-2 ring-thread/40')}
+          className={cn('spotlight relative overflow-hidden rounded-xl border bg-sheet shadow-[0_30px_60px_-30px_rgb(0_0_0/0.8)] transition-shadow', viewing && 'ring-2 ring-thread/40')}
           style={{ transform: `scale(${zoom})`, transformOrigin: '50% 58%' }}
         >
           <figcaption className="flex items-baseline justify-between gap-3 border-b px-4 py-2.5">

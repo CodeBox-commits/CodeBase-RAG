@@ -17,6 +17,8 @@ import { navigate } from '../router'
 import { repoName, useRepos } from '../state'
 import { load, save } from '../storage'
 
+const BUILD_EASE = [0.2, 0.7, 0.2, 1] as const
+
 const nodeId = (filepath: string, name: string) => `${filepath}::${name}`
 const LIMITS = [150, 400, 800, 1500]
 
@@ -275,10 +277,15 @@ export default function ExplorePage() {
         : <ForceGraph3D nodes={nodes} edges={edges} selected={selected} highlight={highlight} onSelect={pick} className="absolute inset-0" />
       )}
 
-      {/* Files: a floating sheet on wide screens, a drawer on narrow ones. */}
-      <aside className="absolute bottom-4 left-4 top-4 hidden w-72 overflow-hidden rounded-xl border bg-sheet/95 shadow-[0_1px_0_rgb(0_0_0/0.03)] backdrop-blur lg:block">
+      {/* Files: a floating sheet on wide screens, a drawer on narrow ones. The page builds in around the
+          city: the files slide in from the left, the view controls drop in, the legend rises. */}
+      <motion.aside
+        initial={{ opacity: 0, x: -40 }}
+        animate={{ opacity: 1, x: 0, transition: { duration: 0.6, ease: BUILD_EASE, delay: 0.2 } }}
+        className="spotlight absolute bottom-4 left-4 top-4 hidden w-72 overflow-hidden rounded-xl border bg-sheet/95 shadow-[0_1px_0_rgb(0_0_0/0.03)] backdrop-blur lg:block"
+      >
         <FilesPanel repo={active.url} query={query} setQuery={setQuery} filepaths={filepaths} file={file} setFile={setFile} />
-      </aside>
+      </motion.aside>
       <div className="absolute left-4 top-4 lg:hidden">
         <Sheet>
           <SheetTrigger asChild>
@@ -292,7 +299,11 @@ export default function ExplorePage() {
       </div>
 
       {/* View and size. */}
-      <div className={cn('absolute right-4 top-16 flex items-center gap-2 transition-[right] duration-300 sm:top-4', sel && 'lg:right-[24.5rem]')}>
+      <motion.div
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0, transition: { duration: 0.5, ease: BUILD_EASE, delay: 0.35 } }}
+        className={cn('absolute right-4 top-16 flex items-center gap-2 transition-[right] duration-300 sm:top-4', sel && 'lg:right-[24.5rem]')}
+      >
         <ToggleGroup
           type="single"
           value={view}
@@ -320,10 +331,13 @@ export default function ExplorePage() {
             {LIMITS.map((n) => <option key={n} value={n}>Top {n} towers</option>)}
           </select>
         </label>
-      </div>
+      </motion.div>
 
       {/* Legend: what the colours and shapes mean, and how much of the repository is shown. */}
-      <div className="pointer-events-none absolute bottom-4 right-4 flex flex-col items-end gap-1.5 text-xs text-muted-foreground lg:left-[19.5rem] lg:right-auto lg:items-start">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0, transition: { duration: 0.5, ease: BUILD_EASE, delay: 0.45 } }}
+        className="pointer-events-none absolute bottom-4 right-4 flex flex-col items-end gap-1.5 text-xs text-muted-foreground lg:left-[19.5rem] lg:right-auto lg:items-start">
         <div className="pointer-events-auto flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-sheet/90 px-3 py-1.5 backdrop-blur">
           {(['function', 'method', 'class'] as const).map((k) => (
             <span key={k} className="flex items-center gap-1.5"><KindSwatch kind={k} />{k} <span className="tabular-nums text-foreground">{kindCounts[k] ?? 0}</span></span>
@@ -333,7 +347,7 @@ export default function ExplorePage() {
         <p className="rounded-md bg-sheet/90 px-3 py-1 backdrop-blur">
           {nodes.length} of {graph?.total_symbols ?? '?'} symbols, by number of links. {view === 'model' ? 'Drag to turn, scroll to zoom, click a tower.' : 'Drag to turn, scroll to zoom, click a node.'}
         </p>
-      </div>
+      </motion.div>
 
       {/* Inspector for the selected symbol. */}
       <AnimatePresence>

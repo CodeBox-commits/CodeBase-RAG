@@ -3,6 +3,9 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useEffect, useState, useSyncExternalStore, type RefObject } from 'react'
 
 gsap.registerPlugin(ScrollTrigger)
+// The page wrapper scales while a page comes in (App.tsx), so positions measured then are off: measure
+// again once it has settled.
+window.addEventListener('page:settled', () => ScrollTrigger.refresh())
 
 // Scroll stories run on wide screens for readers who haven't asked for less motion. Everyone else gets
 // each story in its finished state, so nothing is lost by not scrolling through it.

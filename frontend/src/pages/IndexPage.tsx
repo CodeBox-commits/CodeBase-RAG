@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { getRepoGraph, type IndexResult, type RepoGraph } from '../api'
 import CodeCity from '../components/CodeCity'
 import MiniCity from '../components/MiniCity'
+import { Magnetic, RevealText, Rise, RiseGroup, Tilt } from '../components/motion'
 import { StatusDot } from '../components/Nav'
 import { navigate } from '../router'
 import { repoName, useRepos, type Repo } from '../state'
@@ -206,10 +207,15 @@ export default function IndexPage() {
   return (
     <div className="mx-auto grid max-w-[1600px] gap-10 px-4 py-10 sm:px-6 lg:grid-cols-12 lg:py-14 xl:px-10">
       <section className="lg:col-span-5">
-        <h1 className="display text-[clamp(2.2rem,4vw,3.4rem)]">Index a repository</h1>
+        <RevealText text="Index a repository" className="display text-[clamp(2.2rem,4vw,3.4rem)]" />
+        {/* Then the page builds itself: the line under the title, the form, the list. */}
+        <RiseGroup delay={0.35}>
+        <Rise>
         <p className="mt-4 max-w-[46ch] text-muted-foreground">
           Paste a public GitHub URL. Indexing it again later only re-embeds the files that changed.
         </p>
+        </Rise>
+        <Rise>
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-2 sm:flex-row">
           <label htmlFor="repo-url" className="sr-only">Public GitHub repository URL</label>
           <input
@@ -224,10 +230,12 @@ export default function IndexPage() {
             aria-describedby={error ? 'repo-url-error' : undefined}
             className="h-11 min-w-0 flex-1 rounded-md border bg-sheet px-3.5 font-mono text-[0.85rem] placeholder:text-muted-foreground/70 aria-invalid:border-check"
           />
-          <Button type="submit" size="lg" className="h-11" disabled={busy || !url.trim()}>{busy ? 'Starting…' : 'Index'}</Button>
+          <Magnetic className="sm:w-auto"><Button type="submit" size="lg" className="h-11 w-full" disabled={busy || !url.trim()}>{busy ? 'Starting…' : 'Index'}</Button></Magnetic>
         </form>
         {error && <p id="repo-url-error" className="mt-2 text-sm text-check">{error}</p>}
+        </Rise>
 
+        <Rise>
         <h2 className="mt-12 text-sm font-semibold">On this server</h2>
         {repos.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">Repositories you index appear here, for everyone using this server.</p>
@@ -249,9 +257,13 @@ export default function IndexPage() {
             </AnimatePresence>
           </ul>
         )}
+        </Rise>
+        </RiseGroup>
       </section>
 
       <section className="lg:col-span-7 lg:pl-6" aria-live="polite">
+        <RiseGroup delay={0.45}>
+        <Rise from="right">
         {!active ? (
           <div className="grid h-full min-h-80 place-items-center rounded-xl border border-dashed text-center">
             <div className="px-6">
@@ -260,7 +272,8 @@ export default function IndexPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border bg-sheet p-5 sm:p-7">
+          <Tilt max={2}>
+          <div className="spotlight relative rounded-xl border bg-sheet p-5 sm:p-7">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="font-mono text-[0.95rem] font-semibold">{repoName(active.url)}</h2>
               <p className="text-xs text-muted-foreground">
@@ -345,7 +358,10 @@ export default function IndexPage() {
               </ol>
             )}
           </div>
+          </Tilt>
         )}
+        </Rise>
+        </RiseGroup>
       </section>
 
       <AlertDialog open={deleting != null} onOpenChange={(o) => { if (!o) setDeleting(null) }}>

@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import CommandMenu from './components/CommandMenu'
+import { useSpotlight } from './lib/spotlight'
 import Nav from './components/Nav'
 import { useRoute } from './router'
 import { RepoProvider } from './state'
@@ -33,6 +34,7 @@ const EASE = [0.2, 0.7, 0.2, 1] as const
 export default function App() {
   const route = useRoute()
   const [command, setCommand] = useState(false)
+  useSpotlight()
   useEffect(() => {
     const prefetch = () => Object.values(PAGES).forEach((p) => void p.preload())
     const idle = window.requestIdleCallback?.(prefetch, { timeout: 3000 }) ?? window.setTimeout(prefetch, 1500)
@@ -49,13 +51,16 @@ export default function App() {
         <Nav route={route} onOpenCommand={() => setCommand(true)} />
         <CommandMenu open={command} onOpenChange={setCommand} />
         <main id="main">
-          {/* The old page fades and lifts away, then the new one rises in from just below. */}
+          {/* The old page blurs and sinks back; the new one comes into focus from just in front. Once it has
+              settled, 'page:settled' tells scroll animations to measure the page again (the home story). */}
           <AnimatePresence mode="wait" initial={false} onExitComplete={() => window.scrollTo({ top: 0 })}>
             <motion.div
               key={route}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: EASE } }}
-              exit={{ opacity: 0, y: -8, transition: { duration: 0.15, ease: 'easeIn' } }}
+              style={{ transformOrigin: '50% 50vh' }}
+              initial={{ opacity: 0, scale: 1.03, filter: 'blur(10px)' }}
+              animate={{ opacity: 1, scale: 1, filter: 'blur(0px)', transition: { duration: 0.45, ease: EASE }, transitionEnd: { filter: 'none' } }}
+              exit={{ opacity: 0, scale: 0.97, filter: 'blur(8px)', transition: { duration: 0.22, ease: 'easeIn' } }}
+              onAnimationComplete={() => window.dispatchEvent(new Event('page:settled'))}
             >
               <Suspense fallback={<div className="min-h-[calc(100svh-3.5rem)]" aria-busy />}>
                 <Page route={route} />

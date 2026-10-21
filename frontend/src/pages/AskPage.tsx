@@ -13,6 +13,7 @@ import { CITATION_ONLY, citationSummary, findCitation, linkifyCitations } from '
 import CodeViewer, { CitationChip, targetFromText, type CitationTarget } from '../components/CodeViewer'
 import EmptyState from '../components/EmptyState'
 import LivePipeline, { usePaced } from '../components/LivePipeline'
+import { Magnetic, RevealText, Rise, RiseGroup } from '../components/motion'
 import PipelineInspector from '../components/PipelineInspector'
 import { repoName, useRepos, type Message } from '../state'
 import { load, save } from '../storage'
@@ -82,6 +83,9 @@ function Answer({ msg, onCite }: { msg: Message; onCite: (t: CitationTarget) => 
 export default function AskPage() {
   const { active, chats, updateChat } = useRepos()
   const messages = active ? chats[active.url] ?? [] : []
+  // Questions already here when the page opened (or the repository changed) fade in; new ones fly up.
+  const [restored, setRestored] = useState(() => ({ repo: active?.url, ids: new Set(messages.map((m) => m.id)) }))
+  if (restored.repo !== active?.url) setRestored({ repo: active?.url, ids: new Set(messages.map((m) => m.id)) })
   const [input, setInput] = useState(() => {
     const draft = load<string>('ask-draft', '')
     if (draft) save('ask-draft', '')
@@ -205,21 +209,25 @@ export default function AskPage() {
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-8">
           {turns.length === 0 ? (
             <div className="mx-auto max-w-[68ch] py-16">
-              <h2 className="display text-[clamp(1.9rem,3.4vw,2.7rem)]">Ask about {repoName(repoUrl).split('/')[1] ?? repoName(repoUrl)}</h2>
+              <RevealText as="h2" text={`Ask about ${repoName(repoUrl).split('/')[1] ?? repoName(repoUrl)}`} className="display text-[clamp(1.9rem,3.4vw,2.7rem)]" />
+              <RiseGroup delay={0.35}>
+              <Rise>
               <p className="mt-3 max-w-[56ch] text-muted-foreground">
                 Ask in plain English, and follow up. Every answer cites the file and line it comes from, and each citation is
                 checked against the code the model was shown.
               </p>
-              <ul className="mt-8 divide-y border-y">
+              </Rise>
+              <RiseGroup as="ul" delay={0.5} className="mt-8 divide-y border-y">
                 {SUGGESTIONS.map((s) => (
-                  <li key={s}>
+                  <Rise as="li" key={s}>
                     <button onClick={() => send(s)} className="group flex w-full items-center justify-between gap-4 py-3 text-left text-[0.95rem]">
                       <span>{s}</span>
                       <ArrowUp className="size-4 shrink-0 rotate-45 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
                     </button>
-                  </li>
+                  </Rise>
                 ))}
-              </ul>
+              </RiseGroup>
+              </RiseGroup>
             </div>
           ) : (
             <ol className="mx-auto max-w-[72ch] py-8">
@@ -228,9 +236,9 @@ export default function AskPage() {
                 return (
                   <motion.li
                     key={q.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25 }}
+                    initial={restored.ids.has(q.id) ? { opacity: 0 } : { opacity: 0, y: 90, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={restored.ids.has(q.id) ? { duration: 0.3 } : { type: 'spring', stiffness: 260, damping: 26 }}
                     className="border-b py-7 first:pt-2 last:border-b-0"
                   >
                     <p className="text-[1.02rem] font-semibold leading-snug">{q.content}</p>
@@ -262,7 +270,7 @@ export default function AskPage() {
 
         <form className="border-t bg-background px-4 pb-4 pt-3 sm:px-8" onSubmit={(e) => { e.preventDefault(); send(input) }}>
           <div className="mx-auto max-w-[72ch]">
-            <div className="flex items-end gap-2 rounded-xl border bg-sheet p-2 focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-thread">
+            <div className="spotlight relative flex items-end gap-2 rounded-xl border bg-sheet p-2 focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-thread">
               <label htmlFor="question" className="sr-only">Question</label>
               <textarea
                 id="question"
@@ -284,9 +292,11 @@ export default function AskPage() {
                   <Square className="size-3.5 fill-current" />
                 </Button>
               ) : (
-                <Button type="submit" size="icon" aria-label="Ask" disabled={input.trim().length < 3}>
-                  <ArrowUp />
-                </Button>
+                <Magnetic pull={0.35}>
+                  <Button type="submit" size="icon" aria-label="Ask" disabled={input.trim().length < 3}>
+                    <ArrowUp />
+                  </Button>
+                </Magnetic>
               )}
             </div>
             <div className="mt-2 flex items-center gap-2.5 px-1 text-xs text-muted-foreground">

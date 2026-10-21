@@ -124,7 +124,7 @@ export default function PipelineStory() {
               <article
                 key={s.title}
                 aria-hidden={!live}
-                className="absolute inset-y-0 my-auto flex h-[min(36rem,calc(100%-3rem))] flex-col overflow-hidden rounded-2xl border bg-background/80 p-7 shadow-[0_30px_60px_-30px_rgb(0_0_0/0.8)]"
+                className="spotlight absolute inset-y-0 my-auto flex h-[min(36rem,calc(100%-3rem))] flex-col overflow-hidden rounded-2xl border bg-background/80 p-7 shadow-[0_30px_60px_-30px_rgb(0_0_0/0.8)]"
                 style={style}
               >
                 <header className="flex items-baseline gap-4">
