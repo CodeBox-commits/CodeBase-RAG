@@ -13,7 +13,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- Stage 2: Python dependencies + reranker model -------------------------------
-FROM python:3.12-slim AS deps
+FROM python:3.14-slim AS deps
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN python -m venv /opt/venv
@@ -28,7 +28,7 @@ RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-smal
 
 # --- Stage 3: runtime --------------------------------------------------------------
 # Only the finished virtualenv, the model and the app code: no compilers, no pip cache.
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

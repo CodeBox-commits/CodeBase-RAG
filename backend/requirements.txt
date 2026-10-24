@@ -1,13 +1,13 @@
 fastapi==0.142.2
 uvicorn==0.54.0
-langgraph==1.2.12
+langgraph==1.2.14
 qdrant-client==1.19.1
-neo4j==6.3.1
+neo4j==6.4.0
 celery==5.6.3
 redis==8.1.0
 pydantic==2.13.5
 langchain-google-genai==4.4.0
-python-dotenv==1.2.3
+python-dotenv==1.2.4
 flashrank==0.2.10
 fastembed==0.8.1
 # 0.26 segfaults with the current grammar wheels (ABI mismatch); keep with the grammars.
