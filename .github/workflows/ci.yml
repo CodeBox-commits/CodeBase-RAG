@@ -183,7 +183,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: pip-audit (Python dependencies)
-        run: pip install pip-audit && pip-audit -r backend/requirements.txt
+        # Skips only the IDs in backend/pip-audit-ignore.txt (Pillow 12.3.0, which fastembed pins
+        # below 13; the file says why). Anything else found still fails the job.
+        run: |
+          pip install pip-audit
+          args=()
+          while read -r id; do args+=(--ignore-vuln "$id"); done < <(grep -vE '^[[:space:]]*(#|$)' backend/pip-audit-ignore.txt)
+          pip-audit -r backend/requirements.txt "${args[@]}"
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}

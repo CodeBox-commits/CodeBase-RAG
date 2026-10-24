@@ -1,44 +1,19 @@
-import { motion } from 'motion/react'
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { STATUS_LABEL } from '../citations'
-import CodeBlock from '../components/CodeBlock'
 import CodeCity from '../components/CodeCity'
-import { CitationChip, StatusMark, type CitationTarget } from '../components/CodeViewer'
+import { Magnetic, RevealText, Rise, RiseGroup } from '../components/motion'
+import AnswerStory from '../home/AnswerStory'
+import PipelineStory from '../home/PipelineStory'
+import QualityBand from '../home/QualityBand'
+import { gsap, NAV, ScrollTrigger, useReveal, useScrollScene, useStoryMode } from '../home/useScrollStory'
 import { navigate } from '../router'
 import { sampleCity } from '../sampleCity'
 import { repoName, useRepos } from '../state'
 
 // Everything on this page comes from the sample repository the hero city is built from
 // (sampleCity.ts): a small billing service. Nothing here is a real customer's code.
-
-const STEPS = [
-  { title: 'Plan', body: 'One model call works out what kind of question it is, picks out symbol names and writes search queries.' },
-  { title: 'Search', body: 'Vector search and BM25 keyword search run side by side and merge by rank, so exact names still match.' },
-  { title: 'Rerank', body: 'A small cross-encoder reads the question next to each candidate and keeps the eight that answer it.' },
-  { title: 'Walk the graph', body: 'Callers, callees, base classes and overrides come from the call graph, with their code.' },
-  { title: 'Ask for more', body: 'If something it needs is missing, the model names it and the code is fetched before it answers.' },
-  { title: 'Answer and check', body: 'Every file and line it cites is checked against the code it was actually shown.' },
-]
-
-const SAMPLE_CODE = `def finalize(self, invoice: Invoice) -> Charge:
-    """Charge the customer for a validated invoice."""
-    self.validate(invoice)
-    total = self._total(invoice)
-    if total > invoice.limit:
-        raise LimitExceeded(invoice.id, total)
-    charge = self.gateway.charge(invoice.customer, total)
-    invoice.mark_paid(charge.id)
-    self.events.publish("invoice.paid", invoice.id)
-    return charge`
-
-const CITES: Record<string, CitationTarget> = {
-  limit: { text: 'billing/service.py:46', filepath: 'billing/service.py', line: 46, end_line: 47, status: 'verified' },
-  total: { text: 'billing/service.py:45', filepath: 'billing/service.py', line: 45, end_line: 45, status: 'verified' },
-  checkout: { text: 'api/checkout.py:88', filepath: 'api/checkout.py', line: 88, end_line: 88, status: 'graph' },
-}
 
 const IMPACT = [
   { file: 'billing/service.py', items: [['InvoiceService.finalize', 1, 'calls'], ['InvoiceService.issue_refund', 1, 'calls']] },
@@ -102,12 +77,44 @@ function StartForm({ className }: { className?: string }) {
 
 export default function Home() {
   const city = useMemo(() => sampleCity(), [])
-  const [viewing, setViewing] = useState<CitationTarget | null>(null)
+  const page = useRef<HTMLDivElement>(null)
+  const story = useStoryMode()
+  useReveal(page)
+
+  // The page as a stack of cards: each story card slides up over the one before, which shrinks, dims
+  // and rounds off into the distance underneath it. Wide screens with motion allowed only.
+  useScrollScene(page, (root) => {
+    const coming = (layer: string) => root.querySelector<HTMLElement>(`[data-over="${layer}"]`)
+    root.querySelectorAll<HTMLElement>('[data-layer]').forEach((layer) => {
+      const over = coming(layer.dataset.layer!)
+      if (!over) return
+      gsap.to(layer, {
+        scale: 0.9, opacity: 0.3, borderRadius: 28, ease: 'none',
+        scrollTrigger: { trigger: over, start: 'top bottom', end: `top top+=${NAV}`, scrub: true },
+      })
+    })
+    const over = coming('hero')
+    // The headline lifts away faster than the city behind it.
+    gsap.to(root.querySelector('[data-hero-copy]'), {
+      y: -180, opacity: 0, ease: 'none',
+      scrollTrigger: { trigger: over, start: 'top bottom', end: 'top 35%', scrub: true },
+    })
+    // Once the pipeline card covers the hero, take the hero out so the 3D city stops drawing.
+    const hero = root.querySelector('[data-layer="hero"]')
+    ScrollTrigger.create({
+      trigger: over,
+      start: `top top+=${NAV}`,
+      onEnter: () => gsap.set(hero, { display: 'none' }),
+      onLeaveBack: () => gsap.set(hero, { clearProps: 'display' }),
+    })
+  }, story)
 
   return (
-    <>
-      {/* Hero: the sample repository as a neon city, with the headline beside it. */}
-      <section className="relative -mt-14 overflow-hidden pt-14">
+    <div ref={page}>
+      {/* Hero: the sample repository as a neon city, with the headline beside it. In story mode it stays
+          put while the pipeline card slides up over it. */}
+      <div className="-mt-14" style={story ? { height: 'calc(200svh - 3.5rem)' } : undefined}>
+      <section data-layer="hero" className={cn('relative overflow-hidden pt-14', story && 'sticky top-0 h-svh')}>
         <div className="relative mx-auto grid min-h-[min(860px,calc(100svh-0px))] max-w-[1600px] grid-cols-1 lg:grid-cols-12">
           <CodeCity
             nodes={city.nodes}
@@ -119,25 +126,22 @@ export default function Home() {
           />
           {/* Keeps the copy legible where towers run behind it. */}
           <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 hidden w-[58%] bg-gradient-to-r from-background via-background/80 to-transparent lg:block" />
-          <div className="relative z-10 flex flex-col justify-center px-4 pb-14 sm:px-6 lg:col-span-6 lg:pb-24 xl:col-span-5 xl:pl-10">
-            <motion.h1
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: [0.2, 0.7, 0.2, 1] }}
-              className="display text-[clamp(2.6rem,5vw,4.6rem)]"
-            >
-              Ask your codebase. Get the file and the line.
-            </motion.h1>
-            <p className="mt-6 max-w-[46ch] text-[1.06rem] leading-relaxed text-muted-foreground">
-              Index a Python, JavaScript or TypeScript repository. Every function and class becomes a glowing tower
-              in a city you can walk, every call a light arc between them, and every answer cites code you can open.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-2.5">
-              <Button size="lg" onClick={() => navigate('/index')}>Index a repository</Button>
-              <Button size="lg" variant="outline" className="bg-sheet" onClick={() => document.getElementById('answer')?.scrollIntoView({ behavior: 'smooth' })}>
-                See a checked answer
-              </Button>
-            </div>
+          <div data-hero-copy className="relative z-10 flex flex-col justify-center px-4 pb-14 sm:px-6 lg:col-span-6 lg:pb-24 xl:col-span-5 xl:pl-10">
+            <RevealText text="Ask your codebase. Get the file and the line." className="display text-[clamp(2.6rem,5vw,4.6rem)]" />
+            <RiseGroup delay={0.55}>
+              <Rise as="div">
+                <p className="mt-6 max-w-[46ch] text-[1.06rem] leading-relaxed text-muted-foreground">
+                  Index a Python, JavaScript or TypeScript repository. Every function and class becomes a glowing tower
+                  in a city you can walk, every call a light arc between them, and every answer cites code you can open.
+                </p>
+              </Rise>
+              <Rise className="mt-8 flex flex-wrap gap-2.5">
+                <Magnetic><Button size="lg" onClick={() => navigate('/index')}>Index a repository</Button></Magnetic>
+                <Button size="lg" variant="outline" className="bg-sheet" onClick={() => document.getElementById('answer')?.scrollIntoView({ behavior: 'smooth' })}>
+                  See a checked answer
+                </Button>
+              </Rise>
+            </RiseGroup>
           </div>
           <p className="relative z-10 px-4 pb-6 text-xs leading-relaxed text-muted-foreground sm:px-6 lg:absolute lg:bottom-6 lg:right-6 lg:max-w-sm lg:p-0 lg:text-right">
             A sample billing service as a city. Each tower is a{' '}
@@ -146,101 +150,23 @@ export default function Home() {
           </p>
         </div>
       </section>
+      </div>
 
-      {/* The pipeline: a real sequence, so it's numbered. */}
-      <section className="border-y bg-sheet">
-        <div className="mx-auto max-w-[1600px] px-4 py-16 sm:px-6 xl:px-10">
-          <div className="grid gap-10 lg:grid-cols-12">
-            <div className="lg:col-span-4">
-              <h2 className="display text-[clamp(1.8rem,3vw,2.6rem)]">How a question gets answered</h2>
-              <p className="mt-4 max-w-[40ch] text-muted-foreground">
-                The same six steps run for every question. On the Ask page each one opens up to show what it found.
-              </p>
-            </div>
-            <ol className="grid gap-x-8 gap-y-7 sm:grid-cols-2 lg:col-span-8 lg:grid-cols-3">
-              {STEPS.map((s, i) => (
-                <li key={s.title} className="relative border-t border-rule pt-4">
-                  <span className="display block text-[2.6rem] leading-none tabular-nums">{i + 1}</span>
-                  <h3 className="mt-2 font-semibold">{s.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-      </section>
-
-      {/* A checked answer next to the code it cites. */}
-      <section id="answer" className="mx-auto max-w-[1600px] scroll-mt-20 px-4 py-20 sm:px-6 xl:px-10">
-        <div className="grid items-start gap-10 lg:grid-cols-12">
-          <div className="lg:col-span-5">
-            <h2 className="display text-[clamp(1.8rem,3vw,2.6rem)]">Every citation is checked against what the model saw</h2>
-            <p className="mt-4 max-w-[46ch] text-muted-foreground">
-              Click a citation to open the code with the line marked. Its sign says how far you can trust it.
-            </p>
-            <dl className="mt-8 space-y-3 text-sm">
-              {(['verified', 'graph', 'wrong_line'] as const).map((s) => (
-                <div key={s} className="flex gap-3">
-                  <dt className="mt-0.5"><StatusMark status={s} className="size-4" /></dt>
-                  <dd className="max-w-[44ch] text-muted-foreground">{STATUS_LABEL[s]}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-
-          <div className="grid gap-4 lg:col-span-7">
-            <figure className="rounded-xl border bg-sheet p-5 sm:p-6">
-              <p className="text-sm font-medium">What happens when an invoice goes over its limit?</p>
-              <div className="prose-answer mt-3">
-                <p>
-                  <code>InvoiceService.finalize</code> totals the invoice first <CitationChip target={CITES.total} onOpen={setViewing} />,
-                  then raises <code>LimitExceeded</code> with the invoice id and the total when it's over <code>invoice.limit</code>{' '}
-                  <CitationChip target={CITES.limit} onOpen={setViewing} />. Nothing is charged.
-                </p>
-                <p>
-                  The error reaches <code>checkout</code>, which cancels the order <CitationChip target={CITES.checkout} onOpen={setViewing} />.
-                </p>
-              </div>
-              <figcaption className="mt-4 border-t pt-3 text-xs text-muted-foreground">
-                3 of 3 citations checked. A sample answer about the sample repository.
-              </figcaption>
-            </figure>
-
-            <figure className={cn('overflow-hidden rounded-xl border bg-sheet transition-shadow', viewing && 'ring-2 ring-thread/40')}>
-              <figcaption className="flex items-baseline justify-between gap-3 border-b px-4 py-2.5">
-                <span className="font-mono text-[0.78rem]">billing/service.py</span>
-                <span className="text-xs text-muted-foreground">
-                  {viewing ? `Showing ${viewing.text}` : 'Click a citation above'}
-                </span>
-              </figcaption>
-              <CodeBlock
-                code={SAMPLE_CODE}
-                lang="python"
-                startLine={42}
-                mark={viewing && viewing.filepath === 'billing/service.py' ? [viewing.line, viewing.end_line] : [46, 47]}
-                className="bg-background/40"
-              />
-              {viewing?.filepath === 'api/checkout.py' && (
-                <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">
-                  <span className="font-mono text-foreground">api/checkout.py:88</span> came from the call graph: the location is
-                  real, but its code wasn't in the model's context.
-                </p>
-              )}
-            </figure>
-          </div>
-        </div>
-      </section>
+      {/* The pipeline and the checked answer play out as you scroll (src/home). */}
+      <PipelineStory />
+      <AnswerStory />
+      <QualityBand />
 
       {/* Impact and MCP: what the graph is good for outside of questions. */}
-      <section className="border-t bg-sheet">
+      <section className="relative z-30 border-t bg-background">
         <div className="mx-auto grid max-w-[1600px] gap-12 px-4 py-20 sm:px-6 lg:grid-cols-12 xl:px-10">
-          <div className="lg:col-span-6">
+          <div data-reveal className="lg:col-span-6">
             <h2 className="display text-[clamp(1.6rem,2.6vw,2.2rem)]">See what breaks before you change it</h2>
             <p className="mt-4 max-w-[48ch] text-muted-foreground">
               Pick a tower and ask what depends on it: callers, subclasses and overrides, followed up to three calls back,
               grouped by file with the closest first.
             </p>
-            <div className="mt-6 rounded-xl border bg-background/50 p-5">
+            <div className="spotlight relative mt-6 rounded-xl border bg-background/50 p-5">
               <p className="text-sm">
                 Changing <code className="font-mono text-[0.85em]">InvoiceService._total</code> can affect{' '}
                 <strong className="display text-[1.5rem] text-thread">5</strong> symbols in{' '}
@@ -265,13 +191,13 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="lg:col-span-5 lg:col-start-8">
+          <div data-reveal className="lg:col-span-5 lg:col-start-8">
             <h2 className="display text-[clamp(1.6rem,2.6vw,2.2rem)]">Use it from your editor</h2>
             <p className="mt-4 max-w-[46ch] text-muted-foreground">
               The same lookups are tools for coding agents over MCP: search, definitions, callers and callees, impact, and
               cited answers. Everything except answers is an exact graph lookup, with no model calls.
             </p>
-            <div className="mt-6 overflow-hidden rounded-xl border bg-[#09080e] text-[#e9e8f0]">
+            <div className="spotlight relative mt-6 overflow-hidden rounded-xl border bg-[#09080e] text-[#e9e8f0]">
               <p className="border-b border-white/10 px-4 py-2.5 text-xs text-white/60">Add it to Claude Code</p>
               <pre className="overflow-x-auto px-4 py-4 font-mono text-[0.8rem] leading-relaxed">
                 <span className="text-white/45">$ </span>claude mcp add --transport http codebox http://localhost:8000/mcp
@@ -286,21 +212,23 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-[1600px] px-4 py-24 sm:px-6 xl:px-10">
-        <h2 className="display max-w-[16ch] text-[clamp(2rem,4vw,3.2rem)]">Start with a repository you know well</h2>
-        <p className="mt-4 max-w-[52ch] text-muted-foreground">
-          You'll be able to tell straight away whether the answers are right. Public GitHub repositories only.
-        </p>
-        <StartForm className="mt-8" />
+      <section className="relative z-30 bg-background">
+        <div data-reveal className="mx-auto max-w-[1600px] px-4 py-24 sm:px-6 xl:px-10">
+          <h2 className="display max-w-[16ch] text-[clamp(2rem,4vw,3.2rem)]">Start with a repository you know well</h2>
+          <p className="mt-4 max-w-[52ch] text-muted-foreground">
+            You'll be able to tell straight away whether the answers are right. Public GitHub repositories only.
+          </p>
+          <StartForm className="mt-8" />
+        </div>
       </section>
 
-      <footer className="border-t">
+      <footer className="relative z-30 border-t bg-background">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-1 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:justify-between sm:px-6 xl:px-10">
           <span>Codebase RAG</span>
           <span>FastAPI, Celery, LangGraph, Neo4j, Qdrant, RediSearch and three.js</span>
         </div>
       </footer>
-    </>
+    </div>
   )
 }
 

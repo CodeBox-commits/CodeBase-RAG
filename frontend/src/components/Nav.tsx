@@ -1,4 +1,5 @@
 import { Check, ChevronsUpDown, Menu, Plus, Search } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
@@ -106,14 +107,18 @@ export default function Nav({ route, onOpenCommand }: { route: Route; onOpenComm
       href={`#${l.to}`}
       aria-current={route === l.to ? 'page' : undefined}
       onClick={(e) => { e.preventDefault(); go(l.to) }}
-      className={cn(
-        'relative rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
-        'aria-[current=page]:text-foreground',
-        // The current page is underlined with the thread, like the selected block in the model.
-        'after:absolute after:inset-x-3 after:-bottom-[13px] after:h-0.5 after:scale-x-0 after:bg-thread after:transition-transform aria-[current=page]:after:scale-x-100',
-      )}
+      className="relative rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:text-foreground"
     >
       {l.label}
+      {/* The current page is underlined with the thread, and the line glides to the page you pick. */}
+      {route === l.to && (
+        <motion.span
+          layoutId="nav-underline"
+          aria-hidden
+          className="absolute inset-x-3 -bottom-[13px] h-0.5 bg-thread"
+          transition={{ type: 'spring', stiffness: 520, damping: 42 }}
+        />
+      )}
     </a>
   ))
 
@@ -124,6 +129,16 @@ export default function Nav({ route, onOpenCommand }: { route: Route; onOpenComm
         scrolled || route !== '/' ? 'border-rule bg-background/90 backdrop-blur-md' : 'border-transparent bg-transparent',
       )}
     >
+      {/* A beam of light runs along the nav's edge each time the page changes. */}
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 -bottom-px h-[2px] overflow-hidden">
+        <motion.span
+          key={route}
+          className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-thread to-transparent shadow-[0_0_14px_var(--thread)]"
+          initial={{ x: '-100%', opacity: 1 }}
+          animate={{ x: '300%', opacity: [1, 1, 0] }}
+          transition={{ duration: 0.9, ease: [0.2, 0.7, 0.2, 1] }}
+        />
+      </span>
       <div className="mx-auto flex h-full max-w-[1600px] items-center gap-2 px-4 sm:px-6">
         <a
           href="#/"

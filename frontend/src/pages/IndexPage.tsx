@@ -1,4 +1,5 @@
 import { Check, Compass, MessageSquareText, MoreHorizontal, RefreshCw, Trash2, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import {
@@ -17,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { getRepoGraph, type IndexResult, type RepoGraph } from '../api'
 import CodeCity from '../components/CodeCity'
 import MiniCity from '../components/MiniCity'
+import { Magnetic, RevealText, Rise, RiseGroup, Tilt } from '../components/motion'
 import { StatusDot } from '../components/Nav'
 import { navigate } from '../router'
 import { repoName, useRepos, type Repo } from '../state'
@@ -125,12 +127,19 @@ function BuiltModel({ url }: { url: string }) {
   return <CodeCity nodes={nodes} edges={graph!.edges} controls={false} framing={1.05} className="h-72 sm:h-80" />
 }
 
-function RepoRow({ repo, active, onSelect, onUpdate, onRebuild, onDelete }: {
-  repo: Repo; active: boolean; onSelect: () => void; onUpdate: () => void; onRebuild: () => void; onDelete: () => void
+function RepoRow({ repo, index, active, onSelect, onUpdate, onRebuild, onDelete }: {
+  repo: Repo; index: number; active: boolean; onSelect: () => void; onUpdate: () => void; onRebuild: () => void; onDelete: () => void
 }) {
   const symbols = repo.result?.symbols ?? repo.symbols
   return (
-    <li className={cn('group flex items-center gap-1 rounded-lg pr-1 transition-colors', active ? 'bg-sheet ring-1 ring-rule' : 'hover:bg-sheet/70')}>
+    // Rows arrive one after another, new ones slide into place, and deleted ones slip out.
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index, 8) * 0.04, duration: 0.25 } }}
+      exit={{ opacity: 0, x: -12, transition: { duration: 0.15 } }}
+      className={cn('group flex items-center gap-1 rounded-lg pr-1 transition-colors', active ? 'bg-sheet ring-1 ring-rule' : 'hover:bg-sheet/70')}
+    >
       <button onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-left" aria-current={active || undefined}>
         <StatusDot state={repo.state} />
         <span className="min-w-0 flex-1">
@@ -156,7 +165,7 @@ function RepoRow({ repo, active, onSelect, onUpdate, onRebuild, onDelete }: {
           <DropdownMenuItem variant="destructive" onSelect={onDelete}><Trash2 /> Delete from the index</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </li>
+    </motion.li>
   )
 }
 
@@ -198,10 +207,15 @@ export default function IndexPage() {
   return (
     <div className="mx-auto grid max-w-[1600px] gap-10 px-4 py-10 sm:px-6 lg:grid-cols-12 lg:py-14 xl:px-10">
       <section className="lg:col-span-5">
-        <h1 className="display text-[clamp(2.2rem,4vw,3.4rem)]">Index a repository</h1>
+        <RevealText text="Index a repository" className="display text-[clamp(2.2rem,4vw,3.4rem)]" />
+        {/* Then the page builds itself: the line under the title, the form, the list. */}
+        <RiseGroup delay={0.35}>
+        <Rise>
         <p className="mt-4 max-w-[46ch] text-muted-foreground">
           Paste a public GitHub URL. Indexing it again later only re-embeds the files that changed.
         </p>
+        </Rise>
+        <Rise>
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-2 sm:flex-row">
           <label htmlFor="repo-url" className="sr-only">Public GitHub repository URL</label>
           <input
@@ -216,19 +230,23 @@ export default function IndexPage() {
             aria-describedby={error ? 'repo-url-error' : undefined}
             className="h-11 min-w-0 flex-1 rounded-md border bg-sheet px-3.5 font-mono text-[0.85rem] placeholder:text-muted-foreground/70 aria-invalid:border-check"
           />
-          <Button type="submit" size="lg" className="h-11" disabled={busy || !url.trim()}>{busy ? 'Starting…' : 'Index'}</Button>
+          <Magnetic className="sm:w-auto"><Button type="submit" size="lg" className="h-11 w-full" disabled={busy || !url.trim()}>{busy ? 'Starting…' : 'Index'}</Button></Magnetic>
         </form>
         {error && <p id="repo-url-error" className="mt-2 text-sm text-check">{error}</p>}
+        </Rise>
 
+        <Rise>
         <h2 className="mt-12 text-sm font-semibold">On this server</h2>
         {repos.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">Repositories you index appear here, for everyone using this server.</p>
         ) : (
           <ul className="mt-2 space-y-1">
-            {repos.map((r) => (
+            <AnimatePresence initial>
+            {repos.map((r, i) => (
               <RepoRow
                 key={r.url}
                 repo={r}
+                index={i}
                 active={r.url === active?.url}
                 onSelect={() => setActive(r.url)}
                 onUpdate={() => submit(r.url)}
@@ -236,11 +254,16 @@ export default function IndexPage() {
                 onDelete={() => setDeleting(r.url)}
               />
             ))}
+            </AnimatePresence>
           </ul>
         )}
+        </Rise>
+        </RiseGroup>
       </section>
 
       <section className="lg:col-span-7 lg:pl-6" aria-live="polite">
+        <RiseGroup delay={0.45}>
+        <Rise from="right">
         {!active ? (
           <div className="grid h-full min-h-80 place-items-center rounded-xl border border-dashed text-center">
             <div className="px-6">
@@ -249,7 +272,8 @@ export default function IndexPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border bg-sheet p-5 sm:p-7">
+          <Tilt max={2}>
+          <div className="spotlight relative rounded-xl border bg-sheet p-5 sm:p-7">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="font-mono text-[0.95rem] font-semibold">{repoName(active.url)}</h2>
               <p className="text-xs text-muted-foreground">
@@ -334,7 +358,10 @@ export default function IndexPage() {
               </ol>
             )}
           </div>
+          </Tilt>
         )}
+        </Rise>
+        </RiseGroup>
       </section>
 
       <AlertDialog open={deleting != null} onOpenChange={(o) => { if (!o) setDeleting(null) }}>

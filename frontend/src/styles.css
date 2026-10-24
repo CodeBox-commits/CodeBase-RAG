@@ -264,3 +264,32 @@
   background-size: 36px 100%;
   animation: wire-flow 1.6s linear infinite;
 }
+
+/* A violet light that follows the cursor across a card, brightest on its border nearest the cursor.
+   lib/spotlight.ts sets --mx, --my and --spot on the card under the mouse. The card must be positioned
+   (relative, absolute or sticky) for the light to stay inside it. */
+@utility spotlight {
+  isolation: isolate;
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: var(--spot, 0);
+    transition: opacity 0.35s ease;
+  }
+  /* The wash across the card, under its content. */
+  &::before {
+    z-index: -1;
+    background: radial-gradient(480px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--thread) 11%, transparent), transparent 62%);
+  }
+  /* The border, lit nearest the cursor: a 1px ring cut out of a brighter glow. */
+  &::after {
+    z-index: 1;
+    padding: 1px;
+    background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--thread) 75%, transparent), transparent 65%);
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  }
+}
